@@ -1,13 +1,15 @@
 "use client";
 
 import React, { useState } from "react";
+import Image from "next/image";
 import { Navbar } from "@/components/TestMaker/Navbar";
 import { FileUploader } from "@/components/TestMaker/FileUploader";
 import { TestPreview, QuestionData } from "@/components/TestMaker/TestPreview";
 import { generateMultipleChoiceQuestions } from "@/ai/flows/generate-multiple-choice-questions";
 import { generateDistractors } from "@/ai/flows/generate-distractors";
-import { Loader2, Sparkles, BrainCircuit, Rocket } from "lucide-react";
+import { Loader2, Sparkles, BrainCircuit, Rocket, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
+import { PlaceHolderImages } from "@/lib/placeholder-images";
 
 type AppStep = "input" | "processing" | "review";
 
@@ -16,6 +18,8 @@ export default function Home() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState<QuestionData[]>([]);
+
+  const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
   const handleGenerate = async (content: string) => {
     try {
@@ -84,55 +88,70 @@ export default function Home() {
       <Navbar />
 
       <main className="flex-1">
-        {/* Hero Section - Only show in input step */}
+        {/* Hero Section */}
         {step === "input" && (
-          <div className="relative overflow-hidden bg-primary pt-16 pb-32 lg:pt-24 lg:pb-48">
+          <div className="relative overflow-hidden bg-primary pt-12 pb-32 lg:pt-20 lg:pb-40">
+            {/* Background elements */}
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-2xl" />
             
-            <div className="container mx-auto px-4 relative z-10 text-center space-y-8">
-              <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white text-sm font-medium animate-in slide-in-from-bottom-2 duration-700">
-                <Sparkles className="h-4 w-4 text-accent" />
-                <span>Powered by Advanced AI</span>
-              </div>
-              
-              <div className="space-y-4 max-w-3xl mx-auto">
-                <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white font-headline leading-tight">
-                  Turn Documents into <span className="text-accent">Perfect Exams</span>
-                </h1>
-                <p className="text-lg md:text-xl text-primary-foreground/80 max-w-2xl mx-auto">
-                  TestMaker reads your documents and instantly crafts high-quality multiple-choice questions with plausible distractors.
-                </p>
-              </div>
-
-              <div className="flex flex-wrap justify-center gap-8 pt-8">
-                <div className="flex items-center gap-3 text-white/90">
-                  <div className="bg-white/10 p-2 rounded-lg border border-white/20">
-                    <BrainCircuit className="h-5 w-5 text-accent" />
+            <div className="container mx-auto px-4 relative z-10">
+              <div className="grid lg:grid-cols-2 gap-12 items-center">
+                <div className="text-center lg:text-left space-y-8">
+                  <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white/10 backdrop-blur-sm border border-white/20 text-white text-sm font-medium animate-in slide-in-from-bottom-2 duration-700">
+                    <Sparkles className="h-4 w-4 text-accent" />
+                    <span>Powered by Advanced AI</span>
                   </div>
-                  <div className="text-left">
-                    <p className="font-bold">AI Analysis</p>
-                    <p className="text-xs text-white/60">Deep content understanding</p>
+                  
+                  <div className="space-y-4 max-w-2xl mx-auto lg:mx-0">
+                    <h1 className="text-4xl md:text-6xl font-extrabold tracking-tight text-white font-headline leading-[1.1]">
+                      Turn Documents into <span className="text-accent">Perfect Exams</span>
+                    </h1>
+                    <p className="text-lg md:text-xl text-primary-foreground/80">
+                      TestMaker reads your documents and instantly crafts high-quality multiple-choice questions with plausible distractors.
+                    </p>
+                  </div>
+
+                  <div className="flex flex-wrap justify-center lg:justify-start gap-6 pt-4">
+                    <div className="flex items-center gap-2 text-white/90">
+                      <CheckCircle2 className="h-5 w-5 text-accent" />
+                      <span className="text-sm font-medium">Instant Analysis</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <CheckCircle2 className="h-5 w-5 text-accent" />
+                      <span className="text-sm font-medium">Smart Distractors</span>
+                    </div>
+                    <div className="flex items-center gap-2 text-white/90">
+                      <CheckCircle2 className="h-5 w-5 text-accent" />
+                      <span className="text-sm font-medium">Export Ready</span>
+                    </div>
                   </div>
                 </div>
-                <div className="flex items-center gap-3 text-white/90">
-                  <div className="bg-white/10 p-2 rounded-lg border border-white/20">
-                    <Rocket className="h-5 w-5 text-accent" />
-                  </div>
-                  <div className="text-left">
-                    <p className="font-bold">Instant Export</p>
-                    <p className="text-xs text-white/60">Ready in various formats</p>
-                  </div>
+
+                <div className="hidden lg:block relative">
+                  <div className="absolute inset-0 bg-accent/20 blur-[100px] rounded-full" />
+                  {heroImage && (
+                    <div className="relative glass-morphism p-4 rounded-2xl border-white/30 rotate-3 hover:rotate-0 transition-transform duration-500">
+                      <Image 
+                        src={heroImage.imageUrl} 
+                        alt={heroImage.description}
+                        width={600}
+                        height={400}
+                        className="rounded-xl shadow-2xl"
+                        data-ai-hint={heroImage.imageHint}
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
           </div>
         )}
 
-        <div className={`container mx-auto px-4 ${step === 'input' ? '-mt-24' : 'py-12'}`}>
+        <div className={`container mx-auto px-4 ${step === 'input' ? '-mt-20 lg:-mt-24' : 'py-12'}`}>
           <div className="max-w-5xl mx-auto">
             {step === "input" && (
-              <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100">
+              <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100 relative z-20">
                 <FileUploader onContentReady={handleGenerate} />
               </div>
             )}
