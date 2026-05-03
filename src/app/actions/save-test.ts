@@ -3,7 +3,9 @@
 import fs from 'fs';
 import path from 'path';
 
-export async function saveTest(testName: string, questions: any[]) {
+export type SaveMode = 'new_version' | 'append';
+
+export async function saveTest(testName: string, questions: any[], mode: SaveMode = 'new_version') {
   try {
     const dataDir = path.join(process.cwd(), 'data', 'tests');
     
@@ -15,26 +17,45 @@ export async function saveTest(testName: string, questions: any[]) {
     // Sanitize filename
     const sanitizedName = testName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
     
-    // Versioning: Check if file exists and increment version
+    // Find latest version
     let version = 1;
     let fileName = `${sanitizedName}_v${version}.json`;
-    while (fs.existsSync(path.join(dataDir, fileName))) {
-      version++;
-      fileName = `${sanitizedName}_v${version}.json`;
+    let latestVersion = 0;
+    
+    // Check for the highest existing version
+    while (fs.existsSync(path.join(dataDir, `${sanitizedName}_v${latestVersion + 1}.json`))) {
+      latestVersion++;
     }
 
-    const filePath = path.join(dataDir, fileName);
-    
-    const testData = {
-      name: testName,
-      version: version,
-      generatedAt: new Date().toISOString(),
-      questions: questions
-    };
+    if (mode === 'append' && latestVersion > 0) {
+      // Append to latest
+      const latestPath = path.join(dataDir, `${sanitizedName}_v${latestVersion}.json`);
+      const existingData = JSON.parse(fs.readFileSync(latestPath, 'utf-8'));
+      
+      const updatedData = {
+        ...existingData,
+        updatedAt: new Date().toISOString(),
+        questions: [...existingData.questions, ...questions]
+      };
+      
+      fs.writeFileSync(latestPath, JSON.stringify(updatedData, null, 2));
+      return { success: true, fileName: `${sanitizedName}_v${latestVersion}.json`, version: latestVersion, mode: 'appended' };
+    } else {
+      // Create new version
+      const nextVersion = latestVersion + 1;
+      const nextFileName = `${sanitizedName}_v${nextVersion}.json`;
+      const filePath = path.join(dataDir, nextFileName);
+      
+      const testData = {
+        name: testName,
+        version: nextVersion,
+        generatedAt: new Date().toISOString(),
+        questions: questions
+      };
 
-    fs.writeFileSync(filePath, JSON.stringify(testData, null, 2));
-    
-    return { success: true, fileName, version };
+      fs.writeFileSync(filePath, JSON.stringify(testData, null, 2));
+      return { success: true, fileName: nextFileName, version: nextVersion, mode: 'created' };
+    }
   } catch (error) {
     console.error('Failed to save test:', error);
     return { success: false, error: String(error) };

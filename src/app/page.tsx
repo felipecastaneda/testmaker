@@ -7,10 +7,11 @@ import { FileUploader } from "@/components/TestMaker/FileUploader";
 import { TestPreview, QuestionData } from "@/components/TestMaker/TestPreview";
 import { generateMultipleChoiceQuestions } from "@/ai/flows/generate-multiple-choice-questions";
 import { generateDistractors } from "@/ai/flows/generate-distractors";
-import { Loader2, Sparkles, BrainCircuit, Rocket, CheckCircle2 } from "lucide-react";
+import { Loader2, Sparkles, BrainCircuit, Rocket, CheckCircle2, Plus, Library } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { saveTest } from "./actions/save-test";
+import { TestLibrary } from "@/components/TestMaker/TestLibrary";
 
 type AppStep = "input" | "processing" | "review";
 
@@ -19,54 +20,67 @@ export default function Home() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState<QuestionData[]>([]);
+  const [selectedModels, setSelectedModels] = useState<string[]>(["openai/gpt-4o", "googleai/gemini-2.5-flash"]);
+  const [activeTab, setActiveTab] = useState<"new" | "library">("new");
 
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
-  const handleGenerate = async (content: string, testName: string) => {
+  const handleGenerate = async (content: string, testName: string, saveMode: 'new_version' | 'append', questionCount: number, generateImages: boolean) => {
     try {
       setStep("processing");
-      setLoadingProgress(10);
-      setLoadingStatus("AI is reading your document...");
+      setLoadingProgress(5);
+      setLoadingStatus("Preparing AI models...");
 
-      // 1. Generate core questions
-      const result = await generateMultipleChoiceQuestions({ documentContent: content });
-      setLoadingProgress(40);
-      setLoadingStatus("Extracting core knowledge points...");
+      const fullQuestions: QuestionData[] = [];
+      const questionsPerModel = Math.ceil(questionCount / selectedModels.length);
 
-      if (!result.questions || result.questions.length === 0) {
-        throw new Error("No questions could be generated from this content.");
+      for (const model of selectedModels) {
+        const modelName = model.includes('openai') ? 'ChatGPT' : 'Gemini';
+        setLoadingStatus(`AI ${modelName} is reading your document...`);
+        
+        // 1. Generate core questions for this model
+        const result = await generateMultipleChoiceQuestions({ 
+          documentContent: content,
+          model: model,
+          numberOfQuestions: questionsPerModel
+        });
+        
+        if (!result.questions || result.questions.length === 0) continue;
+
+        // 2. Generate distractors for each question from this model
+        for (let i = 0; i < result.questions.length; i++) {
+          const q = result.questions[i];
+          setLoadingStatus(`AI ${modelName} is creating distractors for question ${fullQuestions.length + 1}...`);
+          
+          const distractors = await generateDistractors({
+            question: q.question,
+            correctAnswer: q.correctAnswer,
+            numberOfDistractors: 3,
+            model: model
+          });
+          
+          fullQuestions.push({
+            id: Math.random().toString(36).substr(2, 9),
+            question: q.question,
+            correctAnswer: q.correctAnswer,
+            distractors: distractors,
+            sourceModel: model,
+            imageUrl: (generateImages && fullQuestions.length === 0) ? "https://img.freepik.com/free-vector/human-cell-structure-anatomy-infographic-poster_1284-33062.jpg" : undefined
+          });
+          
+          setLoadingProgress(Math.floor((fullQuestions.length / questionCount) * 90));
+        }
       }
 
-      // 2. Generate distractors for each question
-      const fullQuestions: QuestionData[] = [];
-      const total = result.questions.length;
-      
-      for (let i = 0; i < total; i++) {
-        const q = result.questions[i];
-        setLoadingStatus(`Creating clever distractors for question ${i + 1} of ${total}...`);
-        
-        const distractors = await generateDistractors({
-          question: q.question,
-          correctAnswer: q.correctAnswer,
-          numberOfDistractors: 3
-        });
-        
-        fullQuestions.push({
-          id: Math.random().toString(36).substr(2, 9),
-          question: q.question,
-          correctAnswer: q.correctAnswer,
-          distractors: distractors
-        });
-        
-        // Progress from 40% to 95%
-        setLoadingProgress(Math.floor(40 + (i + 1) / total * 55));
+      if (fullQuestions.length === 0) {
+        throw new Error("No questions could be generated from the selected models.");
       }
 
       setGeneratedQuestions(fullQuestions);
       
       // 3. Save to JSON file
       setLoadingStatus("Saving your test to the database...");
-      const saveResult = await saveTest(testName, fullQuestions);
+      const saveResult = await saveTest(testName, fullQuestions, saveMode);
       
       if (saveResult.success) {
         console.log(`Saved as ${saveResult.fileName} (Version ${saveResult.version})`);
@@ -89,15 +103,21 @@ export default function Home() {
     }
   };
 
+  const handleLoadExisting = (questions: QuestionData[]) => {
+    setGeneratedQuestions(questions);
+    setStep("review");
+  };
+
   const reset = () => {
     setStep("input");
     setGeneratedQuestions([]);
     setLoadingProgress(0);
+    setActiveTab("new");
   };
 
   return (
     <div className="flex flex-col min-h-screen selection:bg-accent/30">
-      <Navbar />
+      <Navbar selectedModels={selectedModels} onModelsChange={setSelectedModels} />
 
       <main className="flex-1">
         {/* Hero Section */}
@@ -163,8 +183,31 @@ export default function Home() {
         <div className={`container mx-auto px-4 ${step === 'input' ? '-mt-20 lg:-mt-24' : 'py-12'}`}>
           <div className="max-w-5xl mx-auto">
             {step === "input" && (
-              <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100 relative z-20">
-                <FileUploader onContentReady={handleGenerate} />
+              <div className="space-y-6">
+                <div className="flex justify-center">
+                  <div className="inline-flex p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl relative z-30">
+                    <button
+                      onClick={() => setActiveTab("new")}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'new' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
+                    >
+                      <Plus className="h-4 w-4" /> Create New Test
+                    </button>
+                    <button
+                      onClick={() => setActiveTab("library")}
+                      className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
+                    >
+                      <Library className="h-4 w-4" /> My Library
+                    </button>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100 relative z-20">
+                  {activeTab === "new" ? (
+                    <FileUploader onContentReady={handleGenerate} />
+                  ) : (
+                    <TestLibrary onSelectTest={handleLoadExisting} />
+                  )}
+                </div>
               </div>
             )}
 

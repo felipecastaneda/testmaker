@@ -1,18 +1,21 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Edit2, Check, RefreshCw, Trash2, Copy, FileDown } from "lucide-react";
+import { Download, Edit2, Check, X, RefreshCw, Trash2, Copy, FileDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
 
-export type QuestionData = {
+export interface QuestionData {
   id: string;
   question: string;
   correctAnswer: string;
   distractors: string[];
+  imageUrl?: string;
+  sourceModel?: string;
 };
 
 interface TestPreviewProps {
@@ -138,39 +141,57 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
         )}
         {questions.map((q, idx) => (
           <Card key={q.id} className="overflow-hidden border-none shadow-md bg-white hover:shadow-lg transition-shadow">
-            <CardHeader className="bg-slate-50/50 pb-4">
-              <div className="flex items-start justify-between">
-                <div className="space-y-1 w-full">
+            <CardHeader className="border-b bg-slate-50/50 pb-8">
+              <div className="flex justify-between items-start gap-4">
+                <div className="space-y-4 flex-1">
                   <div className="flex items-center gap-2">
-                    <Badge variant="secondary" className="bg-primary/10 text-primary border-none">
-                      Question {idx + 1}
-                    </Badge>
+                    <Badge variant="outline" className="bg-white font-mono text-[10px] px-2 py-0.5">QUESTION {idx + 1}</Badge>
+                    {q.imageUrl && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">DIAGRAM INCLUDED</Badge>}
+                    {q.sourceModel && (
+                      <Badge className={`text-[10px] ${q.sourceModel.includes('openai') ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                        {q.sourceModel.includes('openai') ? 'GPT-4o' : 'Gemini 2.5'}
+                      </Badge>
+                    )}
                   </div>
                   {editingId === q.id ? (
-                    <Input 
+                    <Textarea 
                       value={q.question} 
                       onChange={(e) => updateQuestionText(q.id, e.target.value)}
-                      className="text-lg font-medium mt-2 bg-white"
+                      className="text-lg font-bold bg-white leading-relaxed min-h-[100px]"
                     />
                   ) : (
-                    <h3 className="text-lg font-medium pt-1">{q.question}</h3>
+                    <h3 className="text-xl font-bold text-slate-800 leading-relaxed">
+                      {q.question}
+                    </h3>
                   )}
                 </div>
-                <div className="flex items-center gap-1 ml-4">
+                <div className="flex gap-1 shrink-0">
                   {editingId === q.id ? (
                     <Button variant="ghost" size="icon" onClick={handleSave} className="text-accent hover:bg-accent/10">
                       <Check className="h-4 w-4" />
                     </Button>
                   ) : (
-                    <Button variant="ghost" size="icon" onClick={() => handleEdit(q.id)} className="text-muted-foreground hover:text-primary">
+                    <Button variant="ghost" size="icon" onClick={() => handleEdit(q.id)} className="text-slate-400 hover:text-primary hover:bg-primary/5">
                       <Edit2 className="h-4 w-4" />
                     </Button>
                   )}
-                  <Button variant="ghost" size="icon" onClick={() => deleteQuestion(q.id)} className="text-muted-foreground hover:text-destructive">
+                  <Button variant="ghost" size="icon" onClick={() => deleteQuestion(q.id)} className="text-slate-400 hover:text-rose-500 hover:bg-rose-50">
                     <Trash2 className="h-4 w-4" />
                   </Button>
                 </div>
               </div>
+              
+              {q.imageUrl && (
+                <div className="mt-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2">
+                  <div className="relative aspect-video w-full group">
+                    <img 
+                      src={q.imageUrl} 
+                      alt="Question diagram" 
+                      className="object-contain w-full h-full rounded-xl transition-transform duration-500 group-hover:scale-[1.02]" 
+                    />
+                  </div>
+                </div>
+              )}
             </CardHeader>
             <CardContent className="pt-6">
               <div className="space-y-6">

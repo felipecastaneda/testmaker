@@ -15,6 +15,8 @@ const GenerateMultipleChoiceQuestionsInputSchema = z.object({
   documentContent: z
     .string()
     .describe('The content of the uploaded document (e.g., Word, Excel, or plain text).'),
+  numberOfQuestions: z.number().int().min(1).max(50).default(5).describe('The number of questions to generate.'),
+  model: z.string().optional().default('googleai/gemini-2.5-flash'),
 });
 export type GenerateMultipleChoiceQuestionsInput = z.infer<
   typeof GenerateMultipleChoiceQuestionsInputSchema
@@ -44,9 +46,9 @@ const generateMultipleChoiceQuestionsPrompt = ai.definePrompt({
   name: 'generateMultipleChoiceQuestionsPrompt',
   input: {schema: GenerateMultipleChoiceQuestionsInputSchema},
   output: {schema: GenerateMultipleChoiceQuestionsOutputSchema},
-  prompt: `You are an expert test maker. Your task is to read the provided document content and create multiple-choice questions based on it.
+  prompt: `You are an expert test maker. Your task is to read the provided document content and create exactly {{numberOfQuestions}} multiple-choice questions based on it.
 For each question, provide the question text and the single correct answer. Do not include distractor answers in this step.
-The output must be a JSON array of objects, where each object has a 'question' field and a 'correctAnswer' field.
+The output must be a JSON array of exactly {{numberOfQuestions}} objects, where each object has a 'question' field and a 'correctAnswer' field.
 
 Document Content:
 {{{documentContent}}}`,
@@ -59,7 +61,9 @@ const generateMultipleChoiceQuestionsFlow = ai.defineFlow(
     outputSchema: GenerateMultipleChoiceQuestionsOutputSchema,
   },
   async input => {
-    const {output} = await generateMultipleChoiceQuestionsPrompt(input);
+    const {output} = await generateMultipleChoiceQuestionsPrompt(input, {
+      model: input.model as any,
+    });
     return output!;
   }
 );

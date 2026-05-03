@@ -1,0 +1,107 @@
+{
+  "name": "Principal Engineer Interview Study Guide",
+  "version": 1,
+  "generatedAt": "2026-05-03T13:01:17.154Z",
+  "questions": [
+    {
+      "id": "pyycs7q4b",
+      "question": "What is the default type of component used in the App Router in Next.js?",
+      "correctAnswer": "Server Component",
+      "distractors": [
+        "Client Component",
+        "Static Component",
+        "Dynamic Component"
+      ]
+    },
+    {
+      "id": "ulcz88t36",
+      "question": "Which directory does the App Router use to define routes in Next.js?",
+      "correctAnswer": "app/",
+      "distractors": [
+        "pages/",
+        "routes/",
+        "src/routes/"
+      ]
+    },
+    {
+      "id": "p3xc7hwbs",
+      "question": "What is a key advantage of using GraphQL in a travel app like Travelogis?",
+      "correctAnswer": "Efficient Data Loading",
+      "distractors": [
+        "Increased Database Security",
+        "Simplified Front-End Design",
+        "Automated Payment Processing"
+      ]
+    },
+    {
+      "id": "zll3i4ipq",
+      "question": "In the App Router, which file is used to define the shared UI for a segment and its children?",
+      "correctAnswer": "layout.tsx",
+      "distractors": [
+        "header.tsx",
+        "index.tsx",
+        "template.tsx"
+      ]
+    },
+    {
+      "id": "3x3v3icsz",
+      "question": "What problem does DataLoader solve in GraphQL?",
+      "correctAnswer": "The N+1 problem",
+      "distractors": [
+        "The Caching problem",
+        "Overfetching data problem",
+        "Query performance bottleneck problem"
+      ]
+    },
+    {
+      "id": "40lz6cpsm",
+      "question": "How does the App Router in Next.js handle data fetching?",
+      "correctAnswer": "Using async/await directly in components",
+      "distractors": [
+        "By using getServerSideProps exclusively",
+        "Through getInitialProps in pages",
+        "Using static JSON files under the public directory"
+      ]
+    },
+    {
+      "id": "cp5sdgum2",
+      "question": "What concept does Apollo Federation help manage in GraphQL as an application grows?",
+      "correctAnswer": "Schema Stitching",
+      "distractors": [
+        "Query Execution",
+        "Data Caching",
+        "Authentication Layer"
+      ]
+    },
+    {
+      "id": "u488bdf1x",
+      "question": "What type of route is defined by using brackets [] in the folder name in Next.js App Router?",
+      "correctAnswer": "Dynamic Route",
+      "distractors": [
+        "Static Route",
+        "API Route",
+        "Catch-All Route"
+      ]
+    },
+    {
+      "id": "1gagjmie7",
+      "question": "What does BFF stand for in the context of web development architectures?",
+      "correctAnswer": "Backend-for-Frontend",
+      "distractors": [
+        "Best Frontend Framework",
+        "Browser-first Functionality",
+        "Balanced Framework Foundation"
+      ]
+    },
+    {
+      "id": "08svbj5ll",
+      "question": "Which method is used in the App Router to handle error states automatically?",
+      "correctAnswer": "error.tsx",
+      "distractors": [
+        "404.tsx",
+        "catch.tsx",
+        "exception.tsx"
+      ]
+    }
+  ]
+}
