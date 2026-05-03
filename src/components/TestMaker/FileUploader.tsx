@@ -8,11 +8,12 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
 interface FileUploaderProps {
-  onContentReady: (content: string) => void;
+  onContentReady: (content: string, testName: string) => void;
 }
 
 export function FileUploader({ onContentReady }: FileUploaderProps) {
   const [content, setContent] = useState("");
+  const [testName, setTestName] = useState("");
   const [fileName, setFileName] = useState<string | null>(null);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -45,8 +46,20 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
         <div className="flex items-center justify-between">
-          <h2 className="text-xl font-semibold font-headline">1. Provide Document Content</h2>
-          <p className="text-sm text-muted-foreground">Upload or paste the material for the test</p>
+          <h2 className="text-xl font-semibold font-headline">1. Provide Test Name & Content</h2>
+          <p className="text-sm text-muted-foreground">Give your test a title and upload your material</p>
+        </div>
+
+        <div className="space-y-2">
+          <label htmlFor="test-name" className="text-sm font-medium">Test Name</label>
+          <input
+            id="test-name"
+            type="text"
+            placeholder="e.g., Biology Midterm 2026"
+            className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+            value={testName}
+            onChange={(e) => setTestName(e.target.value)}
+          />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -106,7 +119,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
 
       <div className="flex justify-end">
         <Button 
-          onClick={() => onContentReady(content)} 
+          onClick={() => onContentReady(content, testName || "Untitled Test")} 
           disabled={content.length < 20}
           className="px-8 bg-primary hover:bg-primary/90 text-white font-semibold rounded-full shadow-lg transition-all hover:scale-105"
         >

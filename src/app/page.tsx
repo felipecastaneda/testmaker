@@ -10,6 +10,7 @@ import { generateDistractors } from "@/ai/flows/generate-distractors";
 import { Loader2, Sparkles, BrainCircuit, Rocket, CheckCircle2 } from "lucide-react";
 import { Progress } from "@/components/ui/progress";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
+import { saveTest } from "./actions/save-test";
 
 type AppStep = "input" | "processing" | "review";
 
@@ -21,7 +22,7 @@ export default function Home() {
 
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
-  const handleGenerate = async (content: string) => {
+  const handleGenerate = async (content: string, testName: string) => {
     try {
       setStep("processing");
       setLoadingProgress(10);
@@ -62,12 +63,23 @@ export default function Home() {
       }
 
       setGeneratedQuestions(fullQuestions);
+      
+      // 3. Save to JSON file
+      setLoadingStatus("Saving your test to the database...");
+      const saveResult = await saveTest(testName, fullQuestions);
+      
+      if (saveResult.success) {
+        console.log(`Saved as ${saveResult.fileName} (Version ${saveResult.version})`);
+      }
+
       setLoadingProgress(100);
-      setLoadingStatus("Test ready for review!");
+      setLoadingStatus(saveResult.success 
+        ? `Test saved as ${saveResult.fileName}!` 
+        : "Test ready for review (Auto-save failed)");
       
       setTimeout(() => {
         setStep("review");
-      }, 500);
+      }, 1000);
 
     } catch (error) {
       console.error("Generation failed:", error);
