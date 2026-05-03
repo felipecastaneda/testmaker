@@ -23,6 +23,14 @@ interface TestPreviewProps {
 export function TestPreview({ questions: initialQuestions, onReset }: TestPreviewProps) {
   const [questions, setQuestions] = useState<QuestionData[]>(initialQuestions);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [shuffledOptions] = useState<Record<string, string[]>>(() => {
+    const options: Record<string, string[]> = {};
+    initialQuestions.forEach(q => {
+      options[q.id] = [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5);
+    });
+    return options;
+  });
   const { toast } = useToast();
 
   const handleEdit = (id: string) => {
@@ -62,6 +70,11 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
       title: "Question Deleted",
       description: "The question has been removed from the test.",
     });
+  };
+
+  const handleSelectAnswer = (questionId: string, answer: string) => {
+    if (selectedAnswers[questionId]) return; // Only allow one selection
+    setSelectedAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
   const copyToClipboard = () => {
@@ -160,48 +173,102 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
               </div>
             </CardHeader>
             <CardContent className="pt-6">
-              <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-accent" />
-                    Correct Answer
-                  </p>
-                  {editingId === q.id ? (
-                    <Input 
-                      value={q.correctAnswer} 
-                      onChange={(e) => updateAnswer(q.id, e.target.value)}
-                      className="bg-white"
-                    />
-                  ) : (
-                    <div className="p-3 bg-accent/5 border border-accent/20 rounded-lg text-sm font-medium">
-                      {q.correctAnswer}
+              <div className="space-y-6">
+                {editingId === q.id ? (
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Correct Answer</p>
+                      <Input 
+                        value={q.correctAnswer} 
+                        onChange={(e) => updateAnswer(q.id, e.target.value)}
+                        className="bg-white"
+                      />
                     </div>
-                  )}
-                </div>
-                
-                <div className="space-y-3">
-                  <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
-                    <div className="h-2 w-2 rounded-full bg-slate-300" />
-                    Distractors
-                  </p>
-                  <div className="space-y-2">
-                    {q.distractors.map((dist, dIdx) => (
-                      <div key={dIdx}>
-                        {editingId === q.id ? (
+                    <div className="space-y-3">
+                      <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Distractors</p>
+                      <div className="space-y-2">
+                        {q.distractors.map((dist, dIdx) => (
                           <Input 
+                            key={dIdx}
                             value={dist} 
                             onChange={(e) => updateDistractor(q.id, dIdx, e.target.value)}
                             className="bg-white text-xs"
                           />
-                        ) : (
-                          <div className="p-2 bg-slate-50 border border-slate-100 rounded-lg text-xs text-muted-foreground">
-                            {dist}
-                          </div>
-                        )}
+                        ))}
                       </div>
-                    ))}
+                    </div>
                   </div>
-                </div>
+                ) : (
+                  <div className="grid gap-3">
+                    {shuffledOptions[q.id]?.map((option, oIdx) => {
+                      const isSelected = selectedAnswers[q.id] === option;
+                      const isCorrect = option === q.correctAnswer;
+                      const hasSelected = !!selectedAnswers[q.id];
+                      
+                      let variant = "outline";
+                      let className = "justify-start text-left h-auto py-4 px-6 rounded-xl transition-all duration-300 ";
+                      
+                      if (hasSelected) {
+                        if (isCorrect) {
+                          className += "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm ring-1 ring-emerald-500";
+                        } else if (isSelected) {
+                          className += "bg-rose-50 border-rose-500 text-rose-700 shadow-sm ring-1 ring-rose-500";
+                        } else {
+                          className += "opacity-50 grayscale-[0.5]";
+                        }
+                      } else {
+                        className += "hover:bg-primary/5 hover:border-primary/50 hover:shadow-sm";
+                      }
+
+                      return (
+                        <Button
+                          key={oIdx}
+                          variant="outline"
+                          className={className}
+                          onClick={() => handleSelectAnswer(q.id, option)}
+                          disabled={hasSelected}
+                        >
+                          <div className="flex items-center gap-4 w-full">
+                            <div className={`
+                              flex items-center justify-center w-8 h-8 rounded-full border-2 text-sm font-bold shrink-0 transition-colors
+                              ${hasSelected && isCorrect ? 'bg-emerald-500 border-emerald-500 text-white' : 
+                                hasSelected && isSelected && !isCorrect ? 'bg-rose-500 border-rose-500 text-white' : 
+                                'border-slate-200 text-slate-400'}
+                            `}>
+                              {String.fromCharCode(65 + oIdx)}
+                            </div>
+                            <span className="flex-1">{option}</span>
+                            {hasSelected && isCorrect && <Check className="h-5 w-5 text-emerald-600 shrink-0" />}
+                            {hasSelected && isSelected && !isCorrect && <X className="h-5 w-5 text-rose-600 shrink-0" />}
+                          </div>
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+                
+                {selectedAnswers[q.id] && (
+                  <div className={`
+                    p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300
+                    ${selectedAnswers[q.id] === q.correctAnswer ? 'bg-emerald-50 text-emerald-800 border border-emerald-100' : 'bg-rose-50 text-rose-800 border border-rose-100'}
+                  `}>
+                    {selectedAnswers[q.id] === q.correctAnswer ? (
+                      <>
+                        <Check className="h-5 w-5 text-emerald-600 mt-0.5 shrink-0" />
+                        <p className="text-sm">
+                          <span className="font-bold">Correct!</span> You identified the right answer.
+                        </p>
+                      </>
+                    ) : (
+                      <>
+                        <X className="h-5 w-5 text-rose-600 mt-0.5 shrink-0" />
+                        <p className="text-sm">
+                          <span className="font-bold">Incorrect.</span> The correct answer was <span className="font-bold underline italic">{q.correctAnswer}</span>.
+                        </p>
+                      </>
+                    )}
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
