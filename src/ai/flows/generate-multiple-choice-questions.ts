@@ -17,6 +17,7 @@ const GenerateMultipleChoiceQuestionsInputSchema = z.object({
     .describe('The content of the uploaded document (e.g., Word, Excel, or plain text).'),
   numberOfQuestions: z.number().int().min(1).max(50).default(5).describe('The number of questions to generate.'),
   model: z.string().optional().default('googleai/gemini-2.5-flash'),
+  specialInstructions: z.string().optional().describe('Special instructions or recommendations for the test generation.'),
 });
 export type GenerateMultipleChoiceQuestionsInput = z.infer<
   typeof GenerateMultipleChoiceQuestionsInputSchema
@@ -49,6 +50,11 @@ const generateMultipleChoiceQuestionsPrompt = ai.definePrompt({
   prompt: `You are an expert test maker. Your task is to read the provided document content and create exactly {{numberOfQuestions}} multiple-choice questions based on it.
 For each question, provide the question text and the single correct answer. Do not include distractor answers in this step.
 The output must be a JSON array of exactly {{numberOfQuestions}} objects, where each object has a 'question' field and a 'correctAnswer' field.
+
+{{#if specialInstructions}}
+SPECIAL INSTRUCTIONS:
+{{specialInstructions}}
+{{/if}}
 
 Document Content:
 {{{documentContent}}}`,

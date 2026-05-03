@@ -1,107 +1,558 @@
 {
   "name": "Principal Engineer Interview Study Guide",
   "version": 1,
-  "generatedAt": "2026-05-03T13:01:17.154Z",
+  "generatedAt": "2026-05-03T15:49:54.390Z",
   "questions": [
     {
-      "id": "pyycs7q4b",
-      "question": "What is the default type of component used in the App Router in Next.js?",
+      "id": "27emw088g",
+      "question": "What directory does the App Router use in Next.js?",
+      "correctAnswer": "app/",
+      "distractors": [
+        "pages/",
+        "components/",
+        "src/"
+      ],
+      "sourceModel": "openai/gpt-4o",
+      "imageUrl": "https://img.freepik.com/free-vector/human-cell-structure-anatomy-infographic-poster_1284-33062.jpg"
+    },
+    {
+      "id": "buwwujm9m",
+      "question": "In Next.js, what is the default component type used in the App Router?",
       "correctAnswer": "Server Component",
       "distractors": [
         "Client Component",
         "Static Component",
         "Dynamic Component"
-      ]
+      ],
+      "sourceModel": "openai/gpt-4o"
     },
     {
-      "id": "ulcz88t36",
-      "question": "Which directory does the App Router use to define routes in Next.js?",
+      "id": "z736dxo68",
+      "question": "Which method allows the sharing of layouts in the App Router?",
+      "correctAnswer": "Nested Layouts",
+      "distractors": [
+        "Reusable Components",
+        "Parallel Routing",
+        "Dynamic Rendering"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "os16i6p6k",
+      "question": "What does the function 'fetch' replace in data fetching for the App Router?",
+      "correctAnswer": "getServerSideProps, getStaticProps, getInitialProps",
+      "distractors": [
+        "useEffect",
+        "componentWillMount",
+        "getDerivedStateFromProps"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "gkzjhe8xs",
+      "question": "Which special file in the App Router is used for automatic 404 error handling?",
+      "correctAnswer": "not-found.tsx",
+      "distractors": [
+        "error-handler.tsx",
+        "404.tsx",
+        "missing-page.tsx"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "m6vdwxv9c",
+      "question": "What is the primary function of AWS Lambda in the context of GraphQL resolvers?",
+      "correctAnswer": "Execution of business logic",
+      "distractors": [
+        "Store GraphQL schemas",
+        "Generate API documentation",
+        "Manage user authentication"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "ld6vwt1fj",
+      "question": "What is the purpose of the AWS API Gateway in a Next.js architecture?",
+      "correctAnswer": "Routing frontend requests to Lambda functions",
+      "distractors": [
+        "Serving static assets directly to the client",
+        "Providing a managed database service",
+        "Handling authentication and user sessions"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "7n7l0v3bi",
+      "question": "Which architectural pattern ensures the system's frontend remains responsive under heavy workloads?",
+      "correctAnswer": "Event-Driven Architecture",
+      "distractors": [
+        "Monolithic Architecture",
+        "Layered Architecture",
+        "Microservices Architecture"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "movb8ixc1",
+      "question": "What problem does the DataLoader help solve in GraphQL?",
+      "correctAnswer": "N+1 Performance Issue",
+      "distractors": [
+        "Schema Stitching Conflicts",
+        "Circular Query Dependencies",
+        "Data Type Mismatches"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "f5ltq7hra",
+      "question": "What design principle allows adding new features without modifying existing APIs in GraphQL?",
+      "correctAnswer": "Additive Changes",
+      "distractors": [
+        "Mutable Interfaces",
+        "Subtractive Modifications",
+        "Schema Redesign"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "it8ue8jsp",
+      "question": "In Next.js, which App Router file defines a shared UI for a segment and its children?",
+      "correctAnswer": "layout.tsx",
+      "distractors": [
+        "app.tsx",
+        "index.tsx",
+        "document.tsx"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "8asqc5bln",
+      "question": "What is the consequence of over-fetching in a frontend application?",
+      "correctAnswer": "Increased application load times.",
+      "distractors": [
+        "Improved data security",
+        "Reduced server costs",
+        "Enhanced user interface design"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "fq185knex",
+      "question": "What does the '@deprecated' directive in GraphQL signify?",
+      "correctAnswer": "Marks a field as outdated",
+      "distractors": [
+        "Specifies a default value for a field",
+        "Defines a field as mandatory",
+        "Indicates that a field is part of an experimental feature"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "ml054qv7b",
+      "question": "Which AWS service is designed for asynchronous processing tasks?",
+      "correctAnswer": "EventBridge / SQS",
+      "distractors": [
+        "CloudFront",
+        "RDS",
+        "Redshift"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "bq56zdgkn",
+      "question": "In the context of GraphQL, what is the 'Traffic Cop' rule for resolvers?",
+      "correctAnswer": "Resolvers should contain zero business logic.",
+      "distractors": [
+        "Resolvers should handle all data transformations.",
+        "Resolvers must cache database responses for optimization.",
+        "Resolvers should perform client-side validations."
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "t3ojzxrlt",
+      "question": "In Next.js, how are dynamic routes specified in the App Router?",
+      "correctAnswer": "Using brackets []",
+      "distractors": [
+        "Using parentheses ()",
+        "Using curly braces {}",
+        "Using angle brackets <>"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "omavpsaub",
+      "question": "What does a route file like 'src/app/[lang]/customer/my-travel/[tripId]/' illustrate?",
+      "correctAnswer": "A dynamic URL structure.",
+      "distractors": [
+        "A static file path for storing documents",
+        "A configuration file for app settings",
+        "A template for creating user profiles"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "hdepa1k9g",
+      "question": "Which utility helps optimize data fetching in GraphQL through batching and caching?",
+      "correctAnswer": "DataLoader",
+      "distractors": [
+        "Apollo Client",
+        "Relay",
+        "GraphQL Subscriptions"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "ijwwnhefn",
+      "question": "What is one key advantage of implementing GraphQL for a travel app?",
+      "correctAnswer": "Efficient data loading",
+      "distractors": [
+        "Increased server load",
+        "More complex user interface design",
+        "Higher latency in data fetching"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "xl4684cqm",
+      "question": "Which AWS service is ideal for managing static asset hosting and file storage?",
+      "correctAnswer": "Amazon S3",
+      "distractors": [
+        "Amazon EC2",
+        "Amazon RDS",
+        "Amazon Lambda"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "r4vihrwrj",
+      "question": "What is designed to serve as a high-performance BFF layer in the Next.js App Router?",
+      "correctAnswer": "Server Components",
+      "distractors": [
+        "Client Components",
+        "Static Pages",
+        "API Routes"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "eqxv2ofv4",
+      "question": "Why is Terraform used in infrastructure management?",
+      "correctAnswer": "Ensuring environmental reproducibility",
+      "distractors": [
+        "Providing real-time application monitoring",
+        "Facilitating easy manual configuration changes",
+        "Optimizing network traffic between servers"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "g6a5m9tjs",
+      "question": "What strategy component is essential to handle high-demand application loads?",
+      "correctAnswer": "Distributed caching",
+      "distractors": [
+        "Centralized logging",
+        "In-memory database",
+        "Single server scaling"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "aynwu78y5",
+      "question": "What does the App Router support that allows re-use of layout without re-rendering?",
+      "correctAnswer": "Built-in / Nested Layouts",
+      "distractors": [
+        "Page Caching",
+        "Server-Side Rendering",
+        "Component-Level Memoization"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "jf0a2yncy",
+      "question": "What describes a disadvantage of not optimizing GraphQL queries?",
+      "correctAnswer": "Exponential performance disaster",
+      "distractors": [
+        "Linear data retrieval issue",
+        "Decreased security in API responses",
+        "Compromised caching efficiency"
+      ],
+      "sourceModel": "openai/gpt-4o"
+    },
+    {
+      "id": "kb6e3rplm",
+      "question": "What is the primary directory for routes in the Next.js App Router?",
       "correctAnswer": "app/",
       "distractors": [
         "pages/",
         "routes/",
-        "src/routes/"
-      ]
+        "api/"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "p3xc7hwbs",
-      "question": "What is a key advantage of using GraphQL in a travel app like Travelogis?",
-      "correctAnswer": "Efficient Data Loading",
+      "id": "0en508g1z",
+      "question": "By default, what type of components are used in the Next.js App Router?",
+      "correctAnswer": "Server Components",
       "distractors": [
-        "Increased Database Security",
-        "Simplified Front-End Design",
-        "Automated Payment Processing"
-      ]
+        "Client Components",
+        "Static Components",
+        "Edge Components"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "zll3i4ipq",
-      "question": "In the App Router, which file is used to define the shared UI for a segment and its children?",
-      "correctAnswer": "layout.tsx",
+      "id": "4gqnfxi6h",
+      "question": "How do you explicitly mark a component as a Client Component in the App Router?",
+      "correctAnswer": "By adding 'use client' at the top of the file",
       "distractors": [
-        "header.tsx",
-        "index.tsx",
-        "template.tsx"
-      ]
+        "By naming the file with a .client suffix (e.g., MyComponent.client.js)",
+        "By exporting the component wrapped in withClientDirective()",
+        "By adding a clientComponent prop set to true on the component"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "3x3v3icsz",
-      "question": "What problem does DataLoader solve in GraphQL?",
-      "correctAnswer": "The N+1 problem",
+      "id": "nciba7mdq",
+      "question": "Which Next.js router supports Nested Layouts that wrap all routes inside a folder without re-rendering common parts?",
+      "correctAnswer": "App Router",
       "distractors": [
-        "The Caching problem",
-        "Overfetching data problem",
-        "Query performance bottleneck problem"
-      ]
+        "Pages Router",
+        "React Router",
+        "API Routes"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "40lz6cpsm",
-      "question": "How does the App Router in Next.js handle data fetching?",
-      "correctAnswer": "Using async/await directly in components",
+      "id": "eydf43snz",
+      "question": "How is data fetching typically handled in Server Components within the App Router?",
+      "correctAnswer": "Using async/await directly inside the component",
       "distractors": [
-        "By using getServerSideProps exclusively",
-        "Through getInitialProps in pages",
-        "Using static JSON files under the public directory"
-      ]
+        "Using useEffect to fetch data on component mount",
+        "By implementing getServerSideProps in a separate file",
+        "Through a dedicated API route that the component then fetches from"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "cp5sdgum2",
-      "question": "What concept does Apollo Federation help manage in GraphQL as an application grows?",
-      "correctAnswer": "Schema Stitching",
+      "id": "n3xetsxc3",
+      "question": "Which special file in the App Router defines the unique UI for a route segment?",
+      "correctAnswer": "page.tsx",
       "distractors": [
-        "Query Execution",
-        "Data Caching",
-        "Authentication Layer"
-      ]
+        "layout.tsx",
+        "route.ts",
+        "index.tsx"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "u488bdf1x",
-      "question": "What type of route is defined by using brackets [] in the folder name in Next.js App Router?",
-      "correctAnswer": "Dynamic Route",
+      "id": "0qyzzgfnq",
+      "question": "Which special file in the App Router provides an automatic \"Suspense\" boundary for loading states?",
+      "correctAnswer": "loading.tsx",
       "distractors": [
-        "Static Route",
-        "API Route",
-        "Catch-All Route"
-      ]
+        "fallback.tsx",
+        "suspense.tsx",
+        "layout.tsx"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "1gagjmie7",
-      "question": "What does BFF stand for in the context of web development architectures?",
-      "correctAnswer": "Backend-for-Frontend",
+      "id": "6uxu7z7qu",
+      "question": "Compared to the Pages Router, what is a key performance advantage of the App Router regarding JavaScript bundles?",
+      "correctAnswer": "Minimal JS (only for interactive parts)",
       "distractors": [
-        "Best Frontend Framework",
-        "Browser-first Functionality",
-        "Balanced Framework Foundation"
-      ]
+        "Extensive client-side caching of all application JavaScript files upon the first visit.",
+        "Completely moves all JavaScript execution to the server, removing the need for client-side bundles.",
+        "Combines all client-side JavaScript from all routes into a single, global bundle for faster navigation."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     },
     {
-      "id": "08svbj5ll",
-      "question": "Which method is used in the App Router to handle error states automatically?",
-      "correctAnswer": "error.tsx",
+      "id": "3f4fre85n",
+      "question": "In web development, what is a route primarily defined as?",
+      "correctAnswer": "The mapping between a URL path and specific content",
       "distractors": [
-        "404.tsx",
-        "catch.tsx",
-        "exception.tsx"
-      ]
+        "The process of sending an HTTP request from a client to a server",
+        "A server-side function that processes database queries and returns data",
+        "A client-side history entry that tracks the user's path through a website"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "ekrgre7yn",
+      "question": "In Next.js, what syntax is used in folder names to define a dynamic route segment?",
+      "correctAnswer": "Using brackets like [segmentName]",
+      "distractors": [
+        "Using parentheses like (segmentName)",
+        "Using colons like :segmentName",
+        "Using dollar signs like $segmentName"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "78jmx2lff",
+      "question": "When establishing a dedicated GraphQL endpoint in the App Router, what file is typically used for a Route Handler?",
+      "correctAnswer": "src/app/api/graphql/route.ts",
+      "distractors": [
+        "src/app/api/graphql/index.ts",
+        "src/app/graphql/route.ts",
+        "src/app/api/graphql.ts"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "23nef3y3m",
+      "question": "How can Server Components in the App Router securely fetch data from external GraphQL APIs without exposing sensitive keys to the client?",
+      "correctAnswer": "By fetching data directly within the Server Component",
+      "distractors": [
+        "By configuring client-side environment variables with the API keys, as they are automatically stripped from the final bundle.",
+        "By creating a separate API Route that fetches the data from the GraphQL API, and then having the Server Component call that API Route.",
+        "By using a client component to fetch the data directly, as long as the API keys are stored in a .env.local file."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "yuhif6nii",
+      "question": "What key benefit does GraphQL offer for a travel app with deeply nested data like Trips and Flights?",
+      "correctAnswer": "Efficient Data Loading, preventing over-fetching",
+      "distractors": [
+        "Simplified API endpoint management, using a single endpoint for all data.",
+        "Automatic generation of client-side UI components directly from the schema.",
+        "Enhanced caching capabilities built directly into the GraphQL specification."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "j2jxfhus0",
+      "question": "How does GraphQL schema-driven development help eliminate runtime errors, especially with complex data structures?",
+      "correctAnswer": "By enabling auto-generated TypeScript interfaces for type safety",
+      "distractors": [
+        "By centralizing data fetching logic, reducing the number of round trips to the server",
+        "By enforcing strict input validation and data serialization at the edge layer",
+        "By automatically deploying schema updates to all dependent microservices in real-time"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "yqp6ijmjp",
+      "question": "Which Next.js feature is fundamentally designed to serve as a high-performance Backend-for-Frontend (BFF) layer?",
+      "correctAnswer": "The App Router",
+      "distractors": [
+        "API Routes",
+        "Server-Side Rendering (SSR)",
+        "Static Site Generation (SSG)"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "jdfrhcwap",
+      "question": "What is the \"N+1 Problem\" in GraphQL primarily known for causing?",
+      "correctAnswer": "Inefficient data querying leading to many database hits",
+      "distractors": [
+        "Higher network bandwidth consumption due to over-fetching unnecessary fields",
+        "Difficulty in implementing robust authentication and authorization mechanisms",
+        "Increased client-side complexity in managing query caching and state"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "r822c7z3m",
+      "question": "What utility is designed to solve the N+1 problem in GraphQL through batching and caching?",
+      "correctAnswer": "DataLoader",
+      "distractors": [
+        "Apollo Client",
+        "Redux",
+        "Promise.all()"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "ifvkg4lbk",
+      "question": "DataLoaders must be instantiated on what basis to prevent leaking cached user data across different requests?",
+      "correctAnswer": "On a per-request basis",
+      "distractors": [
+        "As a global singleton",
+        "On a per-user session basis",
+        "On a per-thread basis"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "ar7fa6zz7",
+      "question": "According to Domain-Driven Design (DDD) for GraphQL APIs, how should schema and resolvers be structured instead of a monolithic file?",
+      "correctAnswer": "Broken into logical domains, each with its own type definitions and resolvers",
+      "distractors": [
+        "Grouped by GraphQL operation type (e.g., all Query types in one file, all Mutation types in another).",
+        "Separated into files based on the underlying data source they interact with (e.g., database resolvers, external API resolvers).",
+        "Maintained as a single, comprehensive schema file, with resolvers organized into feature-specific folders."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "odmgz5b98",
+      "question": "What is the \"Traffic Cop\" rule for resolvers in GraphQL schema design?",
+      "correctAnswer": "Resolvers should contain zero business logic; they call service layer functions.",
+      "distractors": [
+        "Resolvers should handle all authentication and authorization checks before calling data sources.",
+        "Resolvers should encapsulate the specific business logic required to compute the value of their field directly.",
+        "Resolvers are primarily responsible for optimizing data fetching by using techniques like DataLoader to solve N+1 problems."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "latxgt3na",
+      "question": "What is the core philosophy for versioning a GraphQL API?",
+      "correctAnswer": "Continuous evolution with additive changes, not API versioning like /v1 or /v2",
+      "distractors": [
+        "To maintain backward compatibility by creating a new endpoint (e.g., /v2) for every breaking change.",
+        "By strictly adhering to semantic versioning at the schema level, releasing major versions only for backward-incompatible changes.",
+        "Allowing clients to specify their preferred API version in the HTTP header, which the server then uses to return a compatible schema."
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "4ccided25",
+      "question": "In a serverless cloud architecture, what is the primary role of AWS Lambda in relation to GraphQL resolvers?",
+      "correctAnswer": "Facilitates business logic execution via stateless, serverless functions",
+      "distractors": [
+        "Acts as the primary GraphQL API gateway for request routing",
+        "Manages GraphQL schema definitions and mutations directly within its function code",
+        "Provides persistent caching for GraphQL query results to improve performance"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "782wvss4g",
+      "question": "What AWS service primarily serves as the entry point, routing frontend requests to Lambda functions and exposing GraphQL endpoints?",
+      "correctAnswer": "AWS API Gateway",
+      "distractors": [
+        "AWS Lambda",
+        "AWS AppSync",
+        "Amazon CloudFront"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "at85vedea",
+      "question": "What is a key principle for engineering scalability in a serverless system using Lambda functions?",
+      "correctAnswer": "Stateless execution, offloading state to external databases or caches",
+      "distractors": [
+        "Configuring persistent storage directly within each Lambda function's ephemeral disk",
+        "Implementing sticky sessions to maintain user context across function invocations",
+        "Maximizing CPU utilization within each Lambda instance to process more requests"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
+    },
+    {
+      "id": "m3uh7obji",
+      "question": "What is the strategic value of Terraform in managing scalable, high-performance environments?",
+      "correctAnswer": "Ensuring environmental reproducibility, strict version control, and infrastructure consistency",
+      "distractors": [
+        "Facilitating real-time performance monitoring and automated health checks for deployed resources",
+        "Automatically patching operating systems and updating application runtimes for security vulnerabilities",
+        "Reducing cloud spend by automatically identifying and rightsizing underutilized resources"
+      ],
+      "sourceModel": "googleai/gemini-2.5-flash"
     }
   ]
 }

@@ -25,7 +25,7 @@ export default function Home() {
 
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
-  const handleGenerate = async (content: string, testName: string, saveMode: 'new_version' | 'append', questionCount: number, generateImages: boolean) => {
+  const handleGenerate = async (content: string, testName: string, saveMode: 'new_version' | 'append' | 'recreate', questionCount: number, generateImages: boolean, recommendations: string) => {
     try {
       setStep("processing");
       setLoadingProgress(5);
@@ -42,7 +42,8 @@ export default function Home() {
         const result = await generateMultipleChoiceQuestions({ 
           documentContent: content,
           model: model,
-          numberOfQuestions: questionsPerModel
+          numberOfQuestions: questionsPerModel,
+          specialInstructions: recommendations
         });
         
         if (!result.questions || result.questions.length === 0) continue;

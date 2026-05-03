@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
-import { Upload, FileText, X, AlertCircle } from "lucide-react";
+import { Upload, FileText, X, AlertCircle, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
@@ -10,15 +10,16 @@ import { listTests } from "@/app/actions/load-test";
 import { useEffect } from "react";
 
 interface FileUploaderProps {
-  onContentReady: (content: string, testName: string, saveMode: 'new_version' | 'append', questionCount: number, generateImages: boolean) => void;
+  onContentReady: (content: string, testName: string, saveMode: 'new_version' | 'append' | 'recreate', questionCount: number, generateImages: boolean, recommendations: string) => void;
 }
 
 export function FileUploader({ onContentReady }: FileUploaderProps) {
   const [content, setContent] = useState("");
   const [testName, setTestName] = useState("");
-  const [saveMode, setSaveMode] = useState<'new_version' | 'append'>("new_version");
+  const [saveMode, setSaveMode] = useState<'new_version' | 'append' | 'recreate'>("new_version");
   const [questionCount, setQuestionCount] = useState(5);
   const [generateImages, setGenerateImages] = useState(false);
+  const [recommendations, setRecommendations] = useState("");
   const [existingTests, setExistingTests] = useState<{name: string}[]>([]);
   const [fileName, setFileName] = useState<string | null>(null);
 
@@ -71,15 +72,15 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
         <div className="grid md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <label htmlFor="test-name" className="text-sm font-medium">
-              {saveMode === 'append' ? 'Target Test' : 'Test Name'}
+              {saveMode === 'new_version' ? 'Test Name' : 'Target Test'}
             </label>
-            {saveMode === 'append' && existingTests.length > 0 ? (
+            {(saveMode === 'append' || saveMode === 'recreate') && existingTests.length > 0 ? (
               <select
                 className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-white"
                 value={testName}
                 onChange={(e) => setTestName(e.target.value)}
               >
-                <option value="">Select a test to append to...</option>
+                <option value="">Select a test to {saveMode}...</option>
                 {existingTests.map((t, i) => (
                   <option key={i} value={t.name}>{t.name}</option>
                 ))}
@@ -88,14 +89,14 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
               <input
                 id="test-name"
                 type="text"
-                placeholder={saveMode === 'append' ? "Type exact name of existing test" : "e.g., Biology Midterm 2026"}
+                placeholder={saveMode === 'new_version' ? "e.g., Biology Midterm 2026" : `Type exact name of test to ${saveMode}`}
                 className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
                 value={testName}
                 onChange={(e) => setTestName(e.target.value)}
               />
             )}
-            {saveMode === 'append' && existingTests.length === 0 && (
-              <p className="text-[10px] text-amber-600 mt-1">No existing tests found to append to.</p>
+            {(saveMode === 'append' || saveMode === 'recreate') && existingTests.length === 0 && (
+              <p className="text-[10px] text-amber-600 mt-1">No existing tests found to {saveMode}.</p>
             )}
           </div>
         </div>
@@ -108,20 +109,26 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
                 onClick={() => setSaveMode("new_version")}
                 className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'new_version' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                New Version (v2, v3...)
+                New Version
               </button>
               <button
                 onClick={() => setSaveMode("append")}
                 className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'append' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
-                Append to Latest
+                Append
+              </button>
+              <button
+                onClick={() => setSaveMode("recreate")}
+                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'recreate' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+              >
+                Re-create
               </button>
             </div>
           </div>
           <p className="text-[10px] text-slate-400 italic">
-            {saveMode === 'new_version' 
-              ? "Creates a separate file for this generation." 
-              : "Adds these questions to the existing file of the same name."}
+            {saveMode === 'new_version' && "Creates a separate file (v2, v3...) for this generation."}
+            {saveMode === 'append' && "Adds these questions to the existing file of the same name."}
+            {saveMode === 'recreate' && "Wipes all previous versions of the selected test and starts fresh."}
           </p>
         </div>
 
@@ -158,6 +165,19 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
           >
             <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${generateImages ? 'translate-x-6' : 'translate-x-1'}`} />
           </button>
+        </div>
+
+        <div className="space-y-4 p-5 bg-indigo-50/50 rounded-2xl border border-indigo-100">
+          <div className="flex items-center gap-2 mb-2">
+            <Sparkles className="h-4 w-4 text-indigo-500" />
+            <label className="text-sm font-bold text-slate-800">AI Recommendations & Personalization</label>
+          </div>
+          <Textarea 
+            placeholder='e.g., "Use Travelogis as a company example", "Focus on technical implementation", "Make questions challenging"'
+            className="bg-white border-indigo-100 text-sm min-h-[80px]"
+            value={recommendations}
+            onChange={(e) => setRecommendations(e.target.value)}
+          />
         </div>
 
         <div className="grid gap-6 md:grid-cols-2">
@@ -217,7 +237,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
 
       <div className="flex justify-end">
         <Button 
-          onClick={() => onContentReady(content, testName || "Untitled Test", saveMode, questionCount, generateImages)} 
+          onClick={() => onContentReady(content, testName || "Untitled Test", saveMode, questionCount, generateImages, recommendations)} 
           disabled={content.length < 20}
           className="px-8 bg-primary hover:bg-primary/90 text-white font-semibold rounded-full shadow-lg transition-all hover:scale-105"
         >

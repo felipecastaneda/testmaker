@@ -3,7 +3,7 @@
 import fs from 'fs';
 import path from 'path';
 
-export type SaveMode = 'new_version' | 'append';
+export type SaveMode = 'new_version' | 'append' | 'recreate';
 
 export async function saveTest(testName: string, questions: any[], mode: SaveMode = 'new_version') {
   try {
@@ -25,6 +25,16 @@ export async function saveTest(testName: string, questions: any[], mode: SaveMod
     // Check for the highest existing version
     while (fs.existsSync(path.join(dataDir, `${sanitizedName}_v${latestVersion + 1}.json`))) {
       latestVersion++;
+    }
+
+    if (mode === 'recreate') {
+      // Delete all existing versions first
+      let v = 1;
+      while (fs.existsSync(path.join(dataDir, `${sanitizedName}_v${v}.json`))) {
+        fs.unlinkSync(path.join(dataDir, `${sanitizedName}_v${v}.json`));
+        v++;
+      }
+      latestVersion = 0; // Reset for creation below
     }
 
     if (mode === 'append' && latestVersion > 0) {
