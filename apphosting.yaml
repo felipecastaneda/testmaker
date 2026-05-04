@@ -5,3 +5,29 @@ runConfig:
   # Increase this value if you'd like to automatically spin up
   # more instances in response to increased traffic.
   maxInstances: 1
+
+env:
+  - variable: NEXT_PUBLIC_FIREBASE_API_KEY
+    value: AIzaSyBBeESIHUus0MQsEsHEg0tukqF9Mzbr0qg
+    availability: ["BUILD", "RUNTIME"]
+  - variable: NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN
+    value: testmaker-3fa6b.firebaseapp.com
+    availability: ["BUILD", "RUNTIME"]
+  - variable: NEXT_PUBLIC_FIREBASE_PROJECT_ID
+    value: testmaker-3fa6b
+    availability: ["BUILD", "RUNTIME"]
+  - variable: NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET
+    value: testmaker-3fa6b.firebasestorage.app
+    availability: ["BUILD", "RUNTIME"]
+  - variable: NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID
+    value: "422095708584"
+    availability: ["BUILD", "RUNTIME"]
+  - variable: NEXT_PUBLIC_FIREBASE_APP_ID
+    value: "1:422095708584:web:75177d4b2985af09913d9d"
+    availability: ["BUILD", "RUNTIME"]
+  - variable: GOOGLE_GENAI_API_KEY
+    secret: google_genai_api_key
+    availability: ["RUNTIME"]
+  - variable: OPENAI_API_KEY
+    secret: openai_api_key
+    availability: ["RUNTIME"]
