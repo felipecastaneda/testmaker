@@ -12,8 +12,7 @@
         "components/",
         "src/"
       ],
-      "sourceModel": "openai/gpt-4o",
-      "imageUrl": "https://img.freepik.com/free-vector/human-cell-structure-anatomy-infographic-poster_1284-33062.jpg"
+      "sourceModel": "openai/gpt-4o"
     },
     {
       "id": "buwwujm9m",

@@ -20,13 +20,15 @@ export default function Home() {
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState<QuestionData[]>([]);
+  const [testName, setTestName] = useState<string>("");
   const [selectedModels, setSelectedModels] = useState<string[]>(["openai/gpt-4o", "googleai/gemini-2.5-flash"]);
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
 
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
-  const handleGenerate = async (content: string, testName: string, saveMode: 'new_version' | 'append' | 'recreate', questionCount: number, generateImages: boolean, recommendations: string) => {
+  const handleGenerate = async (content: string, name: string, saveMode: 'new_version' | 'append' | 'recreate', questionCount: number, generateImages: boolean, recommendations: string) => {
     try {
+      setTestName(name);
       setStep("processing");
       setLoadingProgress(5);
       setLoadingStatus("Preparing AI models...");
@@ -81,7 +83,7 @@ export default function Home() {
       
       // 3. Save to JSON file
       setLoadingStatus("Saving your test to the database...");
-      const saveResult = await saveTest(testName, fullQuestions, saveMode);
+      const saveResult = await saveTest(name, fullQuestions, saveMode);
       
       if (saveResult.success) {
         console.log(`Saved as ${saveResult.fileName} (Version ${saveResult.version})`);
@@ -233,7 +235,12 @@ export default function Home() {
             )}
 
             {step === "review" && (
-              <TestPreview questions={generatedQuestions} onReset={reset} />
+              <TestPreview 
+                questions={generatedQuestions} 
+                setQuestions={setGeneratedQuestions} 
+                onReset={reset} 
+                testName={testName}
+              />
             )}
           </div>
         </div>

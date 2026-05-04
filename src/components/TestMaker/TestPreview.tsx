@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Download, Edit2, Check, X, RefreshCw, Trash2, Copy, FileDown } from "lucide-react";
+import { Download, Edit2, Check, X, RefreshCw, Trash2, Copy, FileDown, Shuffle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/hooks/use-toast";
 import { Badge } from "@/components/ui/badge";
+import { saveTest } from "@/app/actions/save-test";
+import { toast } from "@/hooks/use-toast";
 
 export interface QuestionData {
   id: string;
@@ -20,21 +21,22 @@ export interface QuestionData {
 
 interface TestPreviewProps {
   questions: QuestionData[];
+  setQuestions: React.Dispatch<React.SetStateAction<QuestionData[]>>;
   onReset: () => void;
+  testName?: string;
 }
 
-export function TestPreview({ questions: initialQuestions, onReset }: TestPreviewProps) {
-  const [questions, setQuestions] = useState<QuestionData[]>(initialQuestions);
+export function TestPreview({ questions, setQuestions, onReset, testName }: TestPreviewProps) {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [selectedAnswers, setSelectedAnswers] = useState<Record<string, string>>({});
+  const [showGrade, setShowGrade] = useState(false);
   const [shuffledOptions] = useState<Record<string, string[]>>(() => {
     const options: Record<string, string[]> = {};
-    initialQuestions.forEach(q => {
+    questions.forEach(q => {
       options[q.id] = [q.correctAnswer, ...q.distractors].sort(() => Math.random() - 0.5);
     });
     return options;
   });
-  const { toast } = useToast();
 
   const handleEdit = (id: string) => {
     setEditingId(id);
@@ -49,15 +51,15 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
   };
 
   const updateQuestionText = (id: string, text: string) => {
-    setQuestions(questions.map(q => q.id === id ? { ...q, question: text } : q));
+    setQuestions(prev => prev.map(q => q.id === id ? { ...q, question: text } : q));
   };
 
   const updateAnswer = (id: string, text: string) => {
-    setQuestions(questions.map(q => q.id === id ? { ...q, correctAnswer: text } : q));
+    setQuestions(prev => prev.map(q => q.id === id ? { ...q, correctAnswer: text } : q));
   };
 
   const updateDistractor = (qId: string, index: number, text: string) => {
-    setQuestions(questions.map(q => {
+    setQuestions(prev => prev.map(q => {
       if (q.id === qId) {
         const newDistractors = [...q.distractors];
         newDistractors[index] = text;
@@ -67,8 +69,66 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
     }));
   };
 
+  const removeImage = async (id: string) => {
+    console.log(`Attempting to remove image for question ID: ${id}`);
+
+    setQuestions((prevQuestions: QuestionData[]) => {
+      const updatedQuestions = prevQuestions.map(q => q.id === id ? { ...q, imageUrl: undefined } : q);
+
+      // Make deletion permanent in JSON if we have a test name
+      if (testName) {
+        saveTest(testName, updatedQuestions, 'recreate').then(result => {
+          if (result.success) {
+            toast({
+              title: "Image Deleted Permanently",
+              description: "The JSON file has been updated.",
+            });
+          }
+        }).catch(error => {
+          console.error("Failed to save image deletion:", error);
+          toast({
+            title: "Error saving changes",
+            description: "The image was removed from view but could not be deleted from the file.",
+            variant: "destructive"
+          });
+        });
+      }
+
+      return updatedQuestions;
+    });
+
+    if (!testName) {
+      toast({
+        title: "Image Removed",
+        description: "The diagram has been removed from this session.",
+      });
+    }
+  };
+
+  const shuffleQuestions = async () => {
+    const shuffled = [...questions].sort(() => Math.random() - 0.5);
+    setQuestions(shuffled);
+    
+    if (testName) {
+      try {
+        await saveTest(testName, shuffled, 'recreate');
+        toast({
+          title: "Order Randomized",
+          description: "New question order saved to file.",
+        });
+      } catch (error) {
+        console.error("Failed to save shuffle:", error);
+      }
+    } else {
+      toast({
+        title: "Order Randomized",
+        description: "The current session has been re-shuffled.",
+      });
+    }
+  };
+
   const deleteQuestion = (id: string) => {
-    setQuestions(questions.filter(q => q.id !== id));
+    setQuestions(prev => prev.filter(q => q.id !== id));
     toast({
       title: "Question Deleted",
       description: "The question has been removed from the test.",
@@ -80,17 +140,40 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
     setSelectedAnswers(prev => ({ ...prev, [questionId]: answer }));
   };
 
-  const copyToClipboard = () => {
-    const text = questions.map((q, i) => {
-      const options = [q.correctAnswer, ...q.distractors].sort();
-      return `Question ${i + 1}: ${q.question}\nOptions:\n${options.map((opt, idx) => `${String.fromCharCode(65 + idx)}) ${opt}`).join('\n')}\nCorrect Answer: ${q.correctAnswer}\n\n`;
-    }).join('');
-    
-    navigator.clipboard.writeText(text);
+  const resetTestAttempt = () => {
+    setSelectedAnswers({});
+    setShowGrade(false);
     toast({
-      title: "Copied to clipboard",
-      description: "The entire test has been copied.",
+      title: "Test Reset",
+      description: "All your answers have been cleared.",
     });
+  };
+
+  const calculateScore = () => {
+    let correct = 0;
+    questions.forEach(q => {
+      if (selectedAnswers[q.id] === q.correctAnswer) {
+        correct++;
+      }
+    });
+    return {
+      score: correct,
+      total: questions.length,
+      percentage: Math.round((correct / questions.length) * 100)
+    };
+  };
+
+  const finalizeAndGrade = () => {
+    setShowGrade(true);
+    const { score, total, percentage } = calculateScore();
+    
+    toast({
+      title: "Test Graded",
+      description: `You scored ${score}/${total} (${percentage}%)`,
+    });
+
+    // Also trigger download
+    downloadAsTxt();
   };
 
   const downloadAsTxt = () => {
@@ -98,7 +181,7 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
       const options = [q.correctAnswer, ...q.distractors].sort();
       return `Q${i + 1}: ${q.question}\n${options.map((opt, idx) => `   ${String.fromCharCode(65 + idx)}) ${opt}`).join('\n')}\nAnswer: ${q.correctAnswer}\n\n`;
     }).join('');
-    
+
     const blob = new Blob([text], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -118,17 +201,17 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
           <p className="text-sm text-muted-foreground">Review, edit, and export your generated multiple-choice exam.</p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button variant="outline" size="sm" onClick={onReset} className="rounded-full">
+          <Button variant="outline" size="sm" onClick={resetTestAttempt} className="rounded-full">
             <RefreshCw className="h-4 w-4 mr-2" />
             Start Over
           </Button>
-          <Button variant="outline" size="sm" onClick={copyToClipboard} className="rounded-full">
-            <Copy className="h-4 w-4 mr-2" />
-            Copy
+          <Button variant="outline" size="sm" onClick={shuffleQuestions} className="rounded-full text-indigo-600 border-indigo-200 hover:bg-indigo-50">
+            <Shuffle className="h-4 w-4 mr-2" />
+            Shuffle Order
           </Button>
-          <Button variant="default" size="sm" onClick={downloadAsTxt} className="bg-primary hover:bg-primary/90 text-white rounded-full shadow-md">
+          <Button variant="default" size="sm" onClick={finalizeAndGrade} className="bg-primary hover:bg-primary/90 text-white rounded-full shadow-md">
             <Download className="h-4 w-4 mr-2" />
-            Download TXT
+            Finalize & Grade
           </Button>
         </div>
       </div>
@@ -154,8 +237,8 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                     )}
                   </div>
                   {editingId === q.id ? (
-                    <Textarea 
-                      value={q.question} 
+                    <Textarea
+                      value={q.question}
                       onChange={(e) => updateQuestionText(q.id, e.target.value)}
                       className="text-lg font-bold bg-white leading-relaxed min-h-[100px]"
                     />
@@ -180,16 +263,26 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                   </Button>
                 </div>
               </div>
-              
+
               {q.imageUrl && (
-                <div className="mt-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2">
-                  <div className="relative aspect-video w-full group">
-                    <img 
-                      src={q.imageUrl} 
-                      alt="Question diagram" 
-                      className="object-contain w-full h-full rounded-xl transition-transform duration-500 group-hover:scale-[1.02]" 
+                <div className="mt-6 rounded-2xl overflow-hidden border border-slate-200 shadow-sm bg-white p-2 relative group">
+                  <div className="relative aspect-video w-full">
+                    <img
+                      src={q.imageUrl}
+                      alt="Question diagram"
+                      className="object-contain w-full h-full rounded-xl transition-transform duration-500 group-hover:scale-[1.01]"
                     />
                   </div>
+                  {editingId === q.id && (
+                    <Button
+                      variant="destructive"
+                      size="icon"
+                      className="absolute top-4 right-4 h-8 w-8 rounded-full shadow-lg transition-opacity"
+                      onClick={() => removeImage(q.id)}
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  )}
                 </div>
               )}
             </CardHeader>
@@ -199,8 +292,8 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                   <div className="grid gap-4 sm:grid-cols-2">
                     <div className="space-y-3">
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Correct Answer</p>
-                      <Input 
-                        value={q.correctAnswer} 
+                      <Input
+                        value={q.correctAnswer}
                         onChange={(e) => updateAnswer(q.id, e.target.value)}
                         className="bg-white"
                       />
@@ -209,9 +302,9 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                       <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Distractors</p>
                       <div className="space-y-2">
                         {q.distractors.map((dist, dIdx) => (
-                          <Input 
+                          <Input
                             key={dIdx}
-                            value={dist} 
+                            value={dist}
                             onChange={(e) => updateDistractor(q.id, dIdx, e.target.value)}
                             className="bg-white text-xs"
                           />
@@ -225,10 +318,10 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                       const isSelected = selectedAnswers[q.id] === option;
                       const isCorrect = option === q.correctAnswer;
                       const hasSelected = !!selectedAnswers[q.id];
-                      
+
                       let variant = "outline";
                       let className = "justify-start text-left h-auto py-4 px-6 rounded-xl transition-all duration-300 ";
-                      
+
                       if (hasSelected) {
                         if (isCorrect) {
                           className += "bg-emerald-50 border-emerald-500 text-emerald-700 shadow-sm ring-1 ring-emerald-500";
@@ -252,9 +345,9 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                           <div className="flex items-center gap-4 w-full">
                             <div className={`
                               flex items-center justify-center w-8 h-8 rounded-full border-2 text-sm font-bold shrink-0 transition-colors
-                              ${hasSelected && isCorrect ? 'bg-emerald-500 border-emerald-500 text-white' : 
-                                hasSelected && isSelected && !isCorrect ? 'bg-rose-500 border-rose-500 text-white' : 
-                                'border-slate-200 text-slate-400'}
+                              ${hasSelected && isCorrect ? 'bg-emerald-500 border-emerald-500 text-white' :
+                                hasSelected && isSelected && !isCorrect ? 'bg-rose-500 border-rose-500 text-white' :
+                                  'border-slate-200 text-slate-400'}
                             `}>
                               {String.fromCharCode(65 + oIdx)}
                             </div>
@@ -267,7 +360,7 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
                     })}
                   </div>
                 )}
-                
+
                 {selectedAnswers[q.id] && (
                   <div className={`
                     p-4 rounded-xl flex items-start gap-3 animate-in slide-in-from-top-2 duration-300
@@ -296,6 +389,59 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
         ))}
       </div>
 
+      {showGrade && (
+        <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-primary animate-in zoom-in-95 duration-500">
+          <div className="flex flex-col md:flex-row items-center gap-8">
+            <div className="relative w-32 h-32 flex items-center justify-center">
+              <svg className="w-full h-full transform -rotate-90">
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="58"
+                  fill="none"
+                  stroke="#f1f5f9"
+                  strokeWidth="12"
+                />
+                <circle
+                  cx="64"
+                  cy="64"
+                  r="58"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="12"
+                  strokeDasharray={364.42}
+                  strokeDashoffset={364.42 - (364.42 * calculateScore().percentage) / 100}
+                  className="text-primary transition-all duration-1000"
+                />
+              </svg>
+              <div className="absolute inset-0 flex flex-col items-center justify-center">
+                <span className="text-3xl font-black text-slate-800">{calculateScore().percentage}%</span>
+              </div>
+            </div>
+            
+            <div className="flex-1 space-y-2 text-center md:text-left">
+              <h3 className="text-3xl font-black text-slate-800 font-headline">Test Results</h3>
+              <p className="text-lg text-slate-500">
+                You correctly answered <span className="font-bold text-primary">{calculateScore().score}</span> out of <span className="font-bold text-slate-700">{calculateScore().total}</span> questions.
+              </p>
+              <div className="flex flex-wrap gap-2 pt-2 justify-center md:justify-start">
+                <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">
+                  {calculateScore().score} Correct
+                </Badge>
+                <Badge className="bg-rose-100 text-rose-700 border-rose-200">
+                  {calculateScore().total - calculateScore().score} Incorrect
+                </Badge>
+              </div>
+            </div>
+
+            <Button onClick={resetTestAttempt} variant="outline" className="rounded-full border-slate-200 h-12 px-6">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="bg-primary/5 rounded-2xl p-8 border border-primary/10 flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="space-y-1">
           <h3 className="text-xl font-bold text-primary font-headline">Ready for the Exam?</h3>
@@ -306,8 +452,8 @@ export function TestPreview({ questions: initialQuestions, onReset }: TestPrevie
             <FileDown className="h-4 w-4 mr-2" />
             Export as PDF
           </Button>
-          <Button onClick={downloadAsTxt} className="rounded-full bg-primary hover:bg-primary/90 text-white px-8 h-12 text-lg shadow-lg">
-            Finalize & Download
+          <Button onClick={finalizeAndGrade} className="rounded-full bg-primary hover:bg-primary/90 text-white px-8 h-12 text-lg shadow-lg">
+            Finalize & Grade
           </Button>
         </div>
       </div>
