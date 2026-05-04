@@ -223,15 +223,15 @@ export function TestPreview({ questions, setQuestions, onReset, testName }: Test
           </div>
         )}
         {questions.map((q, idx) => (
-          <Card key={q.id} className="overflow-hidden border-none shadow-md bg-white hover:shadow-lg transition-shadow">
-            <CardHeader className="border-b bg-slate-50/50 pb-8">
-              <div className="flex justify-between items-start gap-4">
-                <div className="space-y-4 flex-1">
-                  <div className="flex items-center gap-2">
-                    <Badge variant="outline" className="bg-white font-mono text-[10px] px-2 py-0.5">QUESTION {idx + 1}</Badge>
-                    {q.imageUrl && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px]">DIAGRAM INCLUDED</Badge>}
+          <Card key={q.id} className="overflow-hidden border-none shadow-md bg-white hover:shadow-lg transition-shadow rounded-2xl">
+            <CardHeader className="border-b bg-slate-50/50 p-4 sm:p-8">
+              <div className="flex flex-col sm:flex-row justify-between items-start gap-4">
+                <div className="space-y-4 flex-1 w-full">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <Badge variant="outline" className="bg-white font-mono text-[10px] px-2 py-0.5 shrink-0">QUESTION {idx + 1}</Badge>
+                    {q.imageUrl && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] shrink-0">DIAGRAM INCLUDED</Badge>}
                     {q.sourceModel && (
-                      <Badge className={`text-[10px] ${q.sourceModel.includes('openai') ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
+                      <Badge className={`text-[10px] shrink-0 ${q.sourceModel.includes('openai') ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
                         {q.sourceModel.includes('openai') ? 'GPT-4o' : 'Gemini 2.5'}
                       </Badge>
                     )}
@@ -240,15 +240,15 @@ export function TestPreview({ questions, setQuestions, onReset, testName }: Test
                     <Textarea
                       value={q.question}
                       onChange={(e) => updateQuestionText(q.id, e.target.value)}
-                      className="text-lg font-bold bg-white leading-relaxed min-h-[100px]"
+                      className="text-base sm:text-lg font-bold bg-white leading-relaxed min-h-[100px]"
                     />
                   ) : (
-                    <h3 className="text-xl font-bold text-slate-800 leading-relaxed">
+                    <h3 className="text-lg sm:text-xl font-bold text-slate-800 leading-relaxed">
                       {q.question}
                     </h3>
                   )}
                 </div>
-                <div className="flex gap-1 shrink-0">
+                <div className="flex gap-1 shrink-0 self-end sm:self-start">
                   {editingId === q.id ? (
                     <Button variant="ghost" size="icon" onClick={handleSave} className="text-accent hover:bg-accent/10">
                       <Check className="h-4 w-4" />
@@ -320,7 +320,7 @@ export function TestPreview({ questions, setQuestions, onReset, testName }: Test
                       const hasSelected = !!selectedAnswers[q.id];
 
                       let variant = "outline";
-                      let className = "justify-start text-left h-auto py-4 px-6 rounded-xl transition-all duration-300 ";
+                      let className = "justify-start text-left h-auto py-3 sm:py-4 px-4 sm:px-6 rounded-xl transition-all duration-300 whitespace-normal ";
 
                       if (hasSelected) {
                         if (isCorrect) {
@@ -442,17 +442,17 @@ export function TestPreview({ questions, setQuestions, onReset, testName }: Test
         </div>
       )}
 
-      <div className="bg-primary/5 rounded-2xl p-8 border border-primary/10 flex flex-col md:flex-row items-center justify-between gap-6">
-        <div className="space-y-1">
+      <div className="bg-primary/5 rounded-2xl p-6 sm:p-8 border border-primary/10 flex flex-col lg:flex-row items-center justify-between gap-6">
+        <div className="space-y-1 text-center lg:text-left">
           <h3 className="text-xl font-bold text-primary font-headline">Ready for the Exam?</h3>
           <p className="text-sm text-muted-foreground">Download your test and share it with your students or colleagues.</p>
         </div>
-        <div className="flex items-center gap-4">
-          <Button variant="outline" className="rounded-full border-primary text-primary hover:bg-primary/5">
+        <div className="flex flex-col sm:flex-row items-center gap-4 w-full lg:w-auto">
+          <Button variant="outline" className="w-full sm:w-auto rounded-full border-primary text-primary hover:bg-primary/5">
             <FileDown className="h-4 w-4 mr-2" />
             Export as PDF
           </Button>
-          <Button onClick={finalizeAndGrade} className="rounded-full bg-primary hover:bg-primary/90 text-white px-8 h-12 text-lg shadow-lg">
+          <Button onClick={finalizeAndGrade} className="w-full sm:w-auto rounded-full bg-primary hover:bg-primary/90 text-white px-8 h-12 text-lg shadow-lg">
             Finalize & Grade
           </Button>
         </div>
