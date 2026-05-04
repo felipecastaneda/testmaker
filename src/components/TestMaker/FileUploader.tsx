@@ -104,22 +104,22 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
         <div className="space-y-3 p-4 bg-slate-50/50 rounded-2xl border border-slate-100">
           <div className="flex items-center justify-between">
             <label className="text-sm font-semibold text-slate-700">Save Strategy</label>
-            <div className="flex p-1 bg-white border border-slate-200 rounded-xl gap-1 shadow-sm">
+            <div className="flex p-1 bg-white border border-slate-200 rounded-xl gap-1 shadow-sm w-full sm:w-auto">
               <button
                 onClick={() => setSaveMode("new_version")}
-                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'new_version' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${saveMode === 'new_version' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 New Version
               </button>
               <button
                 onClick={() => setSaveMode("append")}
-                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'append' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${saveMode === 'append' ? 'bg-primary text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Append
               </button>
               <button
                 onClick={() => setSaveMode("recreate")}
-                className={`px-4 py-1.5 text-xs font-bold rounded-lg transition-all ${saveMode === 'recreate' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
+                className={`flex-1 sm:flex-none px-2 sm:px-4 py-1.5 text-[10px] sm:text-xs font-bold rounded-lg transition-all ${saveMode === 'recreate' ? 'bg-rose-500 text-white shadow-md' : 'text-slate-500 hover:text-slate-700'}`}
               >
                 Re-create
               </button>
@@ -138,16 +138,16 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
               <label className="text-sm font-bold text-slate-800">Exam Length</label>
               <p className="text-[11px] text-slate-500">How many questions should we generate?</p>
             </div>
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-2 sm:gap-4 flex-1 justify-end">
               <input 
                 type="range" 
                 min="1" 
                 max="50" 
                 value={questionCount}
                 onChange={(e) => setQuestionCount(parseInt(e.target.value))}
-                className="w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
+                className="w-24 sm:w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
               />
-              <div className="bg-primary text-white font-bold px-3 py-1 rounded-lg text-sm min-w-[3rem] text-center shadow-sm">
+              <div className="bg-primary text-white font-bold px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm min-w-[2.5rem] sm:min-w-[3rem] text-center shadow-sm">
                 {questionCount}
               </div>
             </div>

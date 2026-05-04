@@ -225,17 +225,17 @@ export default function Home() {
           <div className="max-w-5xl mx-auto">
             {step === "input" && (
               <div className="space-y-6">
-                <div className="flex justify-center">
-                  <div className="inline-flex p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl relative z-30">
+                <div className="flex justify-center w-full">
+                  <div className="flex p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl relative z-30 w-full max-w-sm sm:w-auto sm:inline-flex">
                     <button
                       onClick={() => setActiveTab("new")}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'new' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'new' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
                     >
                       <Plus className="h-4 w-4" /> Create New Test
                     </button>
                     <button
                       onClick={() => setActiveTab("library")}
-                      className={`flex items-center gap-2 px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
+                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === 'library' ? 'bg-white text-primary shadow-lg scale-105' : 'text-white hover:bg-white/10'}`}
                     >
                       <Library className="h-4 w-4" /> My Library
                     </button>

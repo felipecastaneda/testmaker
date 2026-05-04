@@ -89,33 +89,33 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
           {filteredTests.map((test) => (
             <Card key={test.id} className="group hover:border-primary/40 hover:shadow-md transition-all duration-300">
               <CardContent className="p-0">
-                <div className="flex items-center justify-between p-5">
-                  <div className="flex items-center gap-4">
-                    <div className="bg-primary/10 p-3 rounded-xl text-primary group-hover:bg-primary group-hover:text-white transition-colors">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
+                  <div className="flex items-start sm:items-center gap-4">
+                    <div className="bg-primary/10 p-3 rounded-xl text-primary group-hover:bg-primary group-hover:text-white transition-colors shrink-0">
                       <FileJson className="h-6 w-6" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <h4 className="font-bold text-slate-800">{test.name}</h4>
-                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0">v{test.version}</Badge>
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="font-bold text-slate-800 truncate max-w-[200px] sm:max-w-md">{test.name}</h4>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">v{test.version}</Badge>
                       </div>
-                      <div className="flex items-center gap-4 mt-1">
-                        <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
+                        <div className="flex items-center gap-1 text-xs text-muted-foreground whitespace-nowrap">
                           <Calendar className="h-3 w-3" />
                           {new Date(test.createdAt).toLocaleDateString()}
                         </div>
-                        <div className="text-xs text-muted-foreground">
+                        <div className="text-xs text-muted-foreground whitespace-nowrap">
                           <span className="font-medium text-slate-600">{test.questionCount}</span> Questions
                         </div>
                       </div>
                     </div>
                   </div>
                   
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-3 sm:pt-0 border-t sm:border-t-0 border-slate-50">
                     <Button 
                       variant="ghost" 
                       size="icon" 
-                      className="text-slate-400 hover:text-rose-500 hover:bg-rose-50"
+                      className="text-slate-400 hover:text-rose-500 hover:bg-rose-50 h-9 w-9"
                       onClick={(e) => { 
                         e.stopPropagation(); 
                         handleDelete(test.id, test.name); 
@@ -125,7 +125,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
                     </Button>
                     <Button 
                       onClick={() => handleLoad(test.id)}
-                      className="rounded-full px-6 bg-slate-900 hover:bg-primary group-hover:scale-105 transition-all"
+                      className="flex-1 sm:flex-none rounded-full px-6 bg-slate-900 hover:bg-primary group-hover:scale-105 transition-all text-sm h-10"
                     >
                       Open Test <ChevronRight className="ml-1 h-4 w-4" />
                     </Button>
