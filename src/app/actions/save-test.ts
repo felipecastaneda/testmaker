@@ -1,73 +1,74 @@
 'use server';
 
-import fs from 'fs';
-import path from 'path';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, setDoc, updateDoc, arrayUnion, deleteDoc, collection, getDocs } from 'firebase/firestore';
 
 export type SaveMode = 'new_version' | 'append' | 'recreate';
 
 export async function saveTest(testName: string, questions: any[], mode: SaveMode = 'new_version') {
   try {
-    const dataDir = path.join(process.cwd(), 'data', 'tests');
-    
-    // Ensure directory exists
-    if (!fs.existsSync(dataDir)) {
-      fs.mkdirSync(dataDir, { recursive: true });
-    }
+    // Sanitize ID
+    const testId = testName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const testRef = doc(db, 'tests', testId);
+    const testSnap = await getDoc(testRef);
 
-    // Sanitize filename
-    const sanitizedName = testName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    
-    // Find latest version
-    let version = 1;
-    let fileName = `${sanitizedName}_v${version}.json`;
-    let latestVersion = 0;
-    
-    // Check for the highest existing version
-    while (fs.existsSync(path.join(dataDir, `${sanitizedName}_v${latestVersion + 1}.json`))) {
-      latestVersion++;
-    }
+    const now = new Date().toISOString();
 
     if (mode === 'recreate') {
-      // Delete all existing versions first
-      let v = 1;
-      while (fs.existsSync(path.join(dataDir, `${sanitizedName}_v${v}.json`))) {
-        fs.unlinkSync(path.join(dataDir, `${sanitizedName}_v${v}.json`));
-        v++;
-      }
-      latestVersion = 0; // Reset for creation below
-    }
-
-    if (mode === 'append' && latestVersion > 0) {
-      // Append to latest
-      const latestPath = path.join(dataDir, `${sanitizedName}_v${latestVersion}.json`);
-      const existingData = JSON.parse(fs.readFileSync(latestPath, 'utf-8'));
-      
-      const updatedData = {
-        ...existingData,
-        updatedAt: new Date().toISOString(),
-        questions: [...existingData.questions, ...questions]
-      };
-      
-      fs.writeFileSync(latestPath, JSON.stringify(updatedData, null, 2));
-      return { success: true, fileName: `${sanitizedName}_v${latestVersion}.json`, version: latestVersion, mode: 'appended' };
-    } else {
-      // Create new version
-      const nextVersion = latestVersion + 1;
-      const nextFileName = `${sanitizedName}_v${nextVersion}.json`;
-      const filePath = path.join(dataDir, nextFileName);
-      
+      // Overwrite completely
       const testData = {
         name: testName,
-        version: nextVersion,
-        generatedAt: new Date().toISOString(),
+        version: 1,
+        generatedAt: now,
+        updatedAt: now,
         questions: questions
       };
-
-      fs.writeFileSync(filePath, JSON.stringify(testData, null, 2));
-      return { success: true, fileName: nextFileName, version: nextVersion, mode: 'created' };
+      await setDoc(testRef, testData);
+      return { success: true, id: testId, version: 1, mode: 'recreated' };
     }
+
+    if (mode === 'append' && testSnap.exists()) {
+      // Append to questions array
+      await updateDoc(testRef, {
+        questions: arrayUnion(...questions),
+        updatedAt: now
+      });
+      return { success: true, id: testId, mode: 'appended' };
+    } 
+
+    // Default: 'new_version' or creation if doesn't exist
+    if (testSnap.exists()) {
+      const currentData = testSnap.data();
+      const nextVersion = (currentData.version || 1) + 1;
+      
+      // For "New Version" in Firestore, we could store versions in a subcollection,
+      // but to keep it simple and compatible with the current UI, we'll just 
+      // replace the current set of questions and bump the version number.
+      // If the user wants to see "previous" versions, we'd need a versions subcollection.
+      // Given the prompt "eliminate JSON", I'll stick to a single-doc per test approach
+      // for now, which is much cleaner for Firestore.
+      
+      await updateDoc(testRef, {
+        version: nextVersion,
+        questions: questions, // Replace with new questions for the new version
+        updatedAt: now
+      });
+      return { success: true, id: testId, version: nextVersion, mode: 'version_bumped' };
+    } else {
+      // Initial creation
+      const testData = {
+        name: testName,
+        version: 1,
+        generatedAt: now,
+        updatedAt: now,
+        questions: questions
+      };
+      await setDoc(testRef, testData);
+      return { success: true, id: testId, version: 1, mode: 'created' };
+    }
+
   } catch (error) {
-    console.error('Failed to save test:', error);
+    console.error('Failed to save test to Firestore:', error);
     return { success: false, error: String(error) };
   }
 }

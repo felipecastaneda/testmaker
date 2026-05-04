@@ -5,8 +5,9 @@ import { FileJson, Calendar, ChevronRight, Search, Clock, Trash2, Loader2 } from
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listTests, loadTest } from "@/app/actions/load-test";
+import { listTests, loadTest, deleteTest } from "@/app/actions/load-test";
 import { Badge } from "@/components/ui/badge";
+import { useToast } from "@/hooks/use-toast";
 
 interface TestLibraryProps {
   onSelectTest: (questions: any[]) => void;
@@ -16,6 +17,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
   const [tests, setTests] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const { toast } = useToast();
 
   useEffect(() => {
     fetchTests();
@@ -30,10 +32,23 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
     setLoading(false);
   };
 
-  const handleLoad = async (fileName: string) => {
-    const result = await loadTest(fileName);
+  const handleLoad = async (testId: string) => {
+    const result = await loadTest(testId);
     if (result.success && result.test) {
       onSelectTest(result.test.questions);
+    }
+  };
+
+  const handleDelete = async (testId: string, name: string) => {
+    if (confirm(`Are you sure you want to delete "${name}"?`)) {
+      const result = await deleteTest(testId);
+      if (result.success) {
+        toast({
+          title: "Test Deleted",
+          description: `"${name}" has been removed.`,
+        });
+        fetchTests();
+      }
     }
   };
 
@@ -101,7 +116,10 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
                       variant="ghost" 
                       size="icon" 
                       className="text-slate-400 hover:text-rose-500 hover:bg-rose-50"
-                      onClick={(e) => { e.stopPropagation(); /* TODO: Delete logic */ }}
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        handleDelete(test.id, test.name); 
+                      }}
                     >
                       <Trash2 className="h-4 w-4" />
                     </Button>

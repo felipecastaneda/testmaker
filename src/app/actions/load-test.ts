@@ -1,52 +1,56 @@
 'use server';
 
-import fs from 'fs';
-import path from 'path';
-
-const dataDir = path.join(process.cwd(), 'data', 'tests');
+import { db } from '@/lib/firebase';
+import { collection, getDocs, doc, getDoc, query, orderBy, deleteDoc } from 'firebase/firestore';
 
 export async function listTests() {
   try {
-    if (!fs.existsSync(dataDir)) {
-      return { success: true, tests: [] };
-    }
-
-    const files = fs.readdirSync(dataDir);
-    const tests = files
-      .filter(f => f.endsWith('.json'))
-      .map(f => {
-        const filePath = path.join(dataDir, f);
-        const stats = fs.statSync(filePath);
-        const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-        
-        return {
-          id: f,
-          name: content.name || f.replace('.json', ''),
-          version: content.version || 1,
-          createdAt: content.generatedAt || stats.birthtime.toISOString(),
-          questionCount: content.questions?.length || 0
-        };
-      })
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const testsRef = collection(db, 'tests');
+    const q = query(testsRef, orderBy('updatedAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    
+    const tests = querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return {
+        id: doc.id,
+        name: data.name || doc.id,
+        version: data.version || 1,
+        createdAt: data.generatedAt || data.updatedAt,
+        updatedAt: data.updatedAt,
+        questionCount: data.questions?.length || 0
+      };
+    });
 
     return { success: true, tests };
   } catch (error) {
-    console.error('Failed to list tests:', error);
+    console.error('Failed to list tests from Firestore:', error);
     return { success: false, error: String(error) };
   }
 }
 
-export async function loadTest(fileName: string) {
+export async function loadTest(testId: string) {
   try {
-    const filePath = path.join(dataDir, fileName);
-    if (!fs.existsSync(filePath)) {
-      throw new Error("File not found");
+    const testRef = doc(db, 'tests', testId);
+    const testSnap = await getDoc(testRef);
+
+    if (!testSnap.exists()) {
+      throw new Error("Test not found in Firestore");
     }
 
-    const content = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
-    return { success: true, test: content };
+    return { success: true, test: testSnap.data() };
   } catch (error) {
-    console.error('Failed to load test:', error);
+    console.error('Failed to load test from Firestore:', error);
+    return { success: false, error: String(error) };
+  }
+}
+
+export async function deleteTest(testId: string) {
+  try {
+    const testRef = doc(db, 'tests', testId);
+    await deleteDoc(testRef);
+    return { success: true };
+  } catch (error) {
+    console.error('Failed to delete test from Firestore:', error);
     return { success: false, error: String(error) };
   }
 }

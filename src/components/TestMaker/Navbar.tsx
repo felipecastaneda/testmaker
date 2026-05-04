@@ -6,9 +6,10 @@ import Link from "next/link";
 interface NavbarProps {
   selectedModels: string[];
   onModelsChange: (models: string[]) => void;
+  onHome?: () => void;
 }
 
-export function Navbar({ selectedModels, onModelsChange }: NavbarProps) {
+export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) {
   const toggleModel = (model: string) => {
     if (selectedModels.includes(model)) {
       if (selectedModels.length > 1) {
@@ -22,12 +23,15 @@ export function Navbar({ selectedModels, onModelsChange }: NavbarProps) {
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between px-4 sm:px-6 lg:px-8">
-        <Link href="/" className="flex items-center gap-2 group">
+        <button 
+          onClick={onHome}
+          className="flex items-center gap-2 group outline-none"
+        >
           <div className="bg-primary p-2 rounded-lg group-hover:bg-primary/90 transition-colors">
             <GraduationCap className="h-6 w-6 text-white" />
           </div>
           <span className="text-xl font-bold tracking-tight text-primary font-headline">TestMaker</span>
-        </Link>
+        </button>
 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">

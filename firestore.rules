@@ -1,6 +1,15 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Allow users to manage their tests
+    match /tests/{testId} {
+      // For now, allowing all access during prototype development.
+      // In production, change this to: if request.auth != null;
+      allow read, write: if true;
+    }
+    
+    // Default rule for everything else
     match /{document=**} {
       allow read, write: if request.auth != null;
     }

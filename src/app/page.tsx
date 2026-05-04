@@ -2,6 +2,7 @@
 
 import React, { useState } from "react";
 import Image from "next/image";
+import Link from "next/link";
 import { Navbar } from "@/components/TestMaker/Navbar";
 import { FileUploader } from "@/components/TestMaker/FileUploader";
 import { TestPreview, QuestionData } from "@/components/TestMaker/TestPreview";
@@ -12,6 +13,16 @@ import { Progress } from "@/components/ui/progress";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
 import { saveTest } from "./actions/save-test";
 import { TestLibrary } from "@/components/TestMaker/TestLibrary";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type AppStep = "input" | "processing" | "review";
 
@@ -23,6 +34,8 @@ export default function Home() {
   const [testName, setTestName] = useState<string>("");
   const [selectedModels, setSelectedModels] = useState<string[]>(["openai/gpt-4o", "googleai/gemini-2.5-flash"]);
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
+  const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const [pendingSave, setPendingSave] = useState<{name: string, questions: QuestionData[], mode: 'new_version' | 'append' | 'recreate'} | null>(null);
 
   const heroImage = PlaceHolderImages.find(img => img.id === "hero-illustration");
 
@@ -80,23 +93,31 @@ export default function Home() {
       }
 
       setGeneratedQuestions(fullQuestions);
-      
-      // 3. Save to JSON file
-      setLoadingStatus("Saving your test to the database...");
-      const saveResult = await saveTest(name, fullQuestions, saveMode);
-      
-      if (saveResult.success) {
-        console.log(`Saved as ${saveResult.fileName} (Version ${saveResult.version})`);
-      }
-
       setLoadingProgress(100);
-      setLoadingStatus(saveResult.success 
-        ? `Test saved as ${saveResult.fileName}!` 
-        : "Test ready for review (Auto-save failed)");
-      
-      setTimeout(() => {
+
+      // 3. Handle Saving with Confirmation for Destructive/Append actions
+      if (saveMode === 'append' || saveMode === 'recreate') {
+        setPendingSave({ name, questions: fullQuestions, mode: saveMode });
+        setLoadingStatus("Questions generated! Please confirm saving to existing test.");
         setStep("review");
-      }, 1000);
+        setShowConfirmDialog(true);
+      } else {
+        // Auto-save for 'new_version'
+        setLoadingStatus("Saving your test to the database...");
+        const saveResult = await saveTest(name, fullQuestions, saveMode);
+        
+        if (saveResult.success) {
+          console.log(`Saved with ID: ${saveResult.id} (Version ${saveResult.version})`);
+        }
+        
+        setLoadingStatus(saveResult.success 
+          ? `Test saved successfully!` 
+          : "Test ready for review (Auto-save failed)");
+        
+        setTimeout(() => {
+          setStep("review");
+        }, 1000);
+      }
 
     } catch (error) {
       console.error("Generation failed:", error);
@@ -111,16 +132,33 @@ export default function Home() {
     setStep("review");
   };
 
+  const confirmSave = async () => {
+    if (!pendingSave) return;
+    
+    setLoadingStatus(`Finalizing ${pendingSave.mode}...`);
+    const result = await saveTest(pendingSave.name, pendingSave.questions, pendingSave.mode);
+    
+    if (result.success) {
+      setLoadingStatus(`Test successfully ${pendingSave.mode}ed!`);
+    } else {
+      setLoadingStatus("Failed to update database.");
+    }
+    
+    setShowConfirmDialog(false);
+    setPendingSave(null);
+  };
+
   const reset = () => {
     setStep("input");
     setGeneratedQuestions([]);
     setLoadingProgress(0);
+    setLoadingStatus("");
     setActiveTab("new");
   };
 
   return (
     <div className="flex flex-col min-h-screen selection:bg-accent/30">
-      <Navbar selectedModels={selectedModels} onModelsChange={setSelectedModels} />
+      <Navbar selectedModels={selectedModels} onModelsChange={setSelectedModels} onHome={reset} />
 
       <main className="flex-1">
         {/* Hero Section */}
@@ -249,12 +287,15 @@ export default function Home() {
       <footer className="bg-slate-900 text-white py-12 mt-20">
         <div className="container mx-auto px-4">
           <div className="flex flex-col md:flex-row items-center justify-between gap-8">
-            <div className="flex items-center gap-2">
-              <div className="bg-primary p-1.5 rounded-lg">
+            <button 
+              onClick={reset}
+              className="flex items-center gap-2 group outline-none"
+            >
+              <div className="bg-primary p-1.5 rounded-lg group-hover:bg-primary/90 transition-colors">
                 <Rocket className="h-5 w-5 text-white" />
               </div>
-              <span className="text-xl font-bold font-headline">TestMaker</span>
-            </div>
+              <span className="text-xl font-bold font-headline text-white">TestMaker</span>
+            </button>
             <p className="text-slate-400 text-sm">
               © {new Date().getFullYear()} TestMaker AI. Designed for intelligent assessment.
             </p>
@@ -266,6 +307,30 @@ export default function Home() {
           </div>
         </div>
       </footer>
+
+      <AlertDialog open={showConfirmDialog} onOpenChange={setShowConfirmDialog}>
+        <AlertDialogContent className="bg-white rounded-2xl border-none shadow-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-2xl font-bold font-headline text-slate-800">
+              Confirm {pendingSave?.mode === 'append' ? 'Appending' : 'Re-creating'} Test
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-slate-500 text-base">
+              {pendingSave?.mode === 'append' 
+                ? `You are about to add ${pendingSave?.questions?.length || 0} new questions to "${pendingSave?.name || 'this test'}". This will modify the existing test in Firestore.`
+                : `Warning: This will PERMANENTLY WIPE all existing questions in "${pendingSave?.name || 'this test'}" and replace them with these new ones. This action cannot be undone.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter className="gap-3">
+            <AlertDialogCancel className="rounded-full px-6 border-slate-200">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmSave}
+              className={`rounded-full px-8 ${pendingSave?.mode === 'recreate' ? 'bg-rose-500 hover:bg-rose-600' : 'bg-primary hover:bg-primary/90'} text-white shadow-lg`}
+            >
+              Confirm & Save
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
