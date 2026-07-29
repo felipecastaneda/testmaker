@@ -142,7 +142,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
               <input 
                 type="range" 
                 min="1" 
-                max="50" 
+                max="100" 
                 value={questionCount}
                 onChange={(e) => setQuestionCount(parseInt(e.target.value))}
                 className="w-24 sm:w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"

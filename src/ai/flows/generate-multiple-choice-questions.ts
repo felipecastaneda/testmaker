@@ -15,7 +15,7 @@ const GenerateMultipleChoiceQuestionsInputSchema = z.object({
   documentContent: z
     .string()
     .describe('The content of the uploaded document (e.g., Word, Excel, or plain text).'),
-  numberOfQuestions: z.number().int().min(1).max(50).default(5).describe('The number of questions to generate.'),
+  numberOfQuestions: z.number().int().min(1).max(100).default(5).describe('The number of questions to generate.'),
   model: z.string().optional().default('googleai/gemini-3.6-flash'),
   specialInstructions: z.string().optional().describe('Special instructions or recommendations for the test generation.'),
 });
