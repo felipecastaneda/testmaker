@@ -36,24 +36,24 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
         <div className="flex items-center gap-4">
           <div className="hidden sm:flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">
             <button
-              onClick={() => toggleModel("openai/gpt-4o")}
-              className={`flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${selectedModels.includes('openai/gpt-4o') ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+              onClick={() => toggleModel("openai/gpt-5.5")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${selectedModels.includes('openai/gpt-5.5') ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${selectedModels.includes('openai/gpt-4o') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-300'}`}>
-                {selectedModels.includes('openai/gpt-4o') && <Check className="h-2 w-2" />}
+              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${selectedModels.includes('openai/gpt-5.5') ? 'bg-amber-500 border-amber-500 text-white' : 'border-slate-300'}`}>
+                {selectedModels.includes('openai/gpt-5.5') && <Check className="h-2 w-2" />}
               </div>
-              <Zap className={`h-3 w-3 ${selectedModels.includes('openai/gpt-4o') ? 'text-amber-500' : ''}`} />
-              ChatGPT
+              <Zap className={`h-3 w-3 ${selectedModels.includes('openai/gpt-5.5') ? 'text-amber-500' : ''}`} />
+              GPT-5.5
             </button>
             <button
-              onClick={() => toggleModel("googleai/gemini-2.5-flash")}
-              className={`flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${selectedModels.includes('googleai/gemini-2.5-flash') ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
+              onClick={() => toggleModel("googleai/gemini-3.6-flash")}
+              className={`flex items-center gap-2 px-3 py-1.5 text-[11px] font-bold rounded-lg transition-all ${selectedModels.includes('googleai/gemini-3.6-flash') ? 'bg-white shadow-sm text-primary' : 'text-slate-400 hover:text-slate-600'}`}
             >
-              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${selectedModels.includes('googleai/gemini-2.5-flash') ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300'}`}>
-                {selectedModels.includes('googleai/gemini-2.5-flash') && <Check className="h-2 w-2" />}
+              <div className={`w-3.5 h-3.5 rounded border flex items-center justify-center transition-colors ${selectedModels.includes('googleai/gemini-3.6-flash') ? 'bg-blue-500 border-blue-500 text-white' : 'border-slate-300'}`}>
+                {selectedModels.includes('googleai/gemini-3.6-flash') && <Check className="h-2 w-2" />}
               </div>
-              <Cpu className={`h-3 w-3 ${selectedModels.includes('googleai/gemini-2.5-flash') ? 'text-blue-500' : ''}`} />
-              Gemini
+              <Cpu className={`h-3 w-3 ${selectedModels.includes('googleai/gemini-3.6-flash') ? 'text-blue-500' : ''}`} />
+              Gemini 3.6
             </button>
           </div>
           

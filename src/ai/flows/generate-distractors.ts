@@ -14,7 +14,7 @@ const GenerateDistractorsInputSchema = z.object({
   question: z.string().describe('The multiple-choice question.'),
   correctAnswer: z.string().describe('The correct answer to the question.'),
   numberOfDistractors: z.number().int().min(1).max(5).default(3).describe('The desired number of distractors to generate.'),
-  model: z.string().optional().default('googleai/gemini-2.5-flash'),
+  model: z.string().optional().default('googleai/gemini-3.6-flash'),
 });
 export type GenerateDistractorsInput = z.infer<typeof GenerateDistractorsInputSchema>;
 

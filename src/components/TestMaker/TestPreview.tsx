@@ -232,7 +232,7 @@ export function TestPreview({ questions, setQuestions, onReset, testName }: Test
                     {q.imageUrl && <Badge className="bg-amber-100 text-amber-700 border-amber-200 text-[10px] shrink-0">DIAGRAM INCLUDED</Badge>}
                     {q.sourceModel && (
                       <Badge className={`text-[10px] shrink-0 ${q.sourceModel.includes('openai') ? 'bg-amber-50 text-amber-600 border-amber-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>
-                        {q.sourceModel.includes('openai') ? 'GPT-4o' : 'Gemini 2.5'}
+                        {q.sourceModel.includes('openai') ? 'GPT-5.5' : 'Gemini 3.6'}
                       </Badge>
                     )}
                   </div>

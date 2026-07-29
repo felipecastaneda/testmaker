@@ -32,7 +32,7 @@ export default function Home() {
   const [loadingStatus, setLoadingStatus] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState<QuestionData[]>([]);
   const [testName, setTestName] = useState<string>("");
-  const [selectedModels, setSelectedModels] = useState<string[]>(["openai/gpt-4o", "googleai/gemini-2.5-flash"]);
+  const [selectedModels, setSelectedModels] = useState<string[]>(["openai/gpt-5.5", "googleai/gemini-3.6-flash"]);
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [pendingSave, setPendingSave] = useState<{name: string, questions: QuestionData[], mode: 'new_version' | 'append' | 'recreate'} | null>(null);
