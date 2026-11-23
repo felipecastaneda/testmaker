@@ -10,13 +10,14 @@
 
 import {ai} from '@/ai/genkit';
 import {z} from 'genkit';
+import {DEFAULT_MODEL_ID} from '@/ai/models';
 
 const GenerateMultipleChoiceQuestionsInputSchema = z.object({
   documentContent: z
     .string()
     .describe('The content of the uploaded document (e.g., Word, Excel, or plain text).'),
   numberOfQuestions: z.number().int().min(1).max(100).default(5).describe('The number of questions to generate.'),
-  model: z.string().optional().default('googleai/gemini-3.6-flash'),
+  model: z.string().optional().default(DEFAULT_MODEL_ID),
   specialInstructions: z.string().optional().describe('Special instructions or recommendations for the test generation.'),
 });
 export type GenerateMultipleChoiceQuestionsInput = z.infer<
@@ -68,8 +69,15 @@ const generateMultipleChoiceQuestionsFlow = ai.defineFlow(
   },
   async input => {
     const {output} = await generateMultipleChoiceQuestionsPrompt(input, {
-      model: input.model as any,
+      model: input.model,
     });
-    return output!;
+    if (!output) {
+      throw new Error(`Model ${input.model} returned no questions.`);
+    }
+    return {
+      questions: output.questions
+        .filter(q => q.question?.trim() && q.correctAnswer?.trim())
+        .slice(0, input.numberOfQuestions),
+    };
   }
 );

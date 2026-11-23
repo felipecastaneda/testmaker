@@ -9,12 +9,13 @@
 
 import { ai } from '@/ai/genkit';
 import { z } from 'genkit';
+import { DEFAULT_MODEL_ID } from '@/ai/models';
 
 const GenerateDistractorsInputSchema = z.object({
   question: z.string().describe('The multiple-choice question.'),
   correctAnswer: z.string().describe('The correct answer to the question.'),
   numberOfDistractors: z.number().int().min(1).max(5).default(3).describe('The desired number of distractors to generate.'),
-  model: z.string().optional().default('googleai/gemini-3.6-flash'),
+  model: z.string().optional().default(DEFAULT_MODEL_ID),
 });
 export type GenerateDistractorsInput = z.infer<typeof GenerateDistractorsInputSchema>;
 
@@ -52,8 +53,24 @@ const generateDistractorsFlow = ai.defineFlow(
   },
   async (input) => {
     const { output } = await prompt(input, {
-      model: input.model as any,
+      model: input.model,
     });
-    return output!;
+    if (!output) {
+      throw new Error(`Model ${input.model} returned no distractors.`);
+    }
+
+    // Models occasionally repeat themselves or echo the correct answer; filter those out
+    // so the student never sees two identical (or two correct) options.
+    const normalize = (s: string) => s.trim().toLowerCase();
+    const seen = new Set([normalize(input.correctAnswer)]);
+    const distractors: string[] = [];
+    for (const raw of output) {
+      const candidate = raw.trim();
+      const key = normalize(candidate);
+      if (!candidate || seen.has(key)) continue;
+      seen.add(key);
+      distractors.push(candidate);
+    }
+    return distractors.slice(0, input.numberOfDistractors);
   }
 );
