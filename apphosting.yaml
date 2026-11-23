@@ -31,3 +31,14 @@ env:
   - variable: OPENAI_API_KEY
     secret: openai_api_key
     availability: ["RUNTIME"]
+  # Comma-separated emails allowed to use the app. Stored as a secret because the repo is public.
+  - variable: ALLOWED_EMAILS
+    secret: allowed_emails
+    availability: ["RUNTIME"]
+  # Tests created before accounts existed are assigned to this user on first sign-in.
+  - variable: LEGACY_OWNER_EMAIL
+    secret: legacy_owner_email
+    availability: ["RUNTIME"]
+  - variable: DAILY_QUESTION_LIMIT
+    value: "300"
+    availability: ["RUNTIME"]

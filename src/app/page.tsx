@@ -1,22 +1,24 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useRef, useState } from "react";
 import Image from "next/image";
 import { Navbar } from "@/components/TestMaker/Navbar";
 import { FileUploader, type GenerateRequest } from "@/components/TestMaker/FileUploader";
 import { TestPreview } from "@/components/TestMaker/TestPreview";
-import { generateMultipleChoiceQuestions } from "@/ai/flows/generate-multiple-choice-questions";
-import { generateDistractors } from "@/ai/flows/generate-distractors";
-import { Loader2, Sparkles, Rocket, CheckCircle2, Plus, Library } from "lucide-react";
+import { TestLibrary } from "@/components/TestMaker/TestLibrary";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { AccessProblemCard, FullCardSpinner, SignInCard, VerifyEmailCard } from "@/components/auth/AuthScreens";
+import { generateQuestionBatch } from "@/app/actions/generate";
+import { loadTest, saveTest } from "@/app/actions/tests";
+import { Loader2, Sparkles, Rocket, CheckCircle2, Plus, Library, X } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { PlaceHolderImages } from "@/lib/placeholder-images";
-import { saveTest, type SaveTestResult } from "./actions/save-test";
-import { loadTest } from "./actions/load-test";
-import { TestLibrary } from "@/components/TestMaker/TestLibrary";
 import { toast } from "@/hooks/use-toast";
-import { AVAILABLE_MODELS, getModelOption } from "@/ai/models";
-import { createId, mapWithConcurrency } from "@/lib/utils";
-import type { QuestionData, SaveMode, StoredTest } from "@/lib/types";
+import { AVAILABLE_MODELS } from "@/ai/models";
+import { chunkDocument, dedupeQuestions, planBatches } from "@/lib/generation";
+import { mapWithConcurrency } from "@/lib/utils";
+import type { QuestionData, SaveMode, SaveTestOutcome, StoredTest } from "@/lib/types";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,180 +32,161 @@ import {
 
 type AppStep = "input" | "processing" | "review";
 
-/** Max simultaneous distractor requests per model, to stay under provider rate limits. */
-const DISTRACTOR_CONCURRENCY = 4;
-const DISTRACTORS_PER_QUESTION = 3;
+/** Simultaneous generation requests in flight, to stay under provider rate limits. */
+const GENERATION_CONCURRENCY = 4;
 
-/** Split `total` across `parts` as evenly as possible, e.g. 5 over 2 -> [3, 2]. */
-function splitEvenly(total: number, parts: number): number[] {
-  const base = Math.floor(total / parts);
-  return Array.from({ length: parts }, (_, i) => base + (i < total % parts ? 1 : 0));
-}
+class StopGeneration extends Error {}
 
-function describeSave(result: SaveTestResult, name: string): string {
-  switch (result.mode) {
+function describeSave(outcome: SaveTestOutcome): string {
+  switch (outcome.mode) {
     case "created":
-      return `"${name}" was saved to your library.`;
+      return `"${outcome.name}" was saved to your library.`;
     case "version_bumped":
-      return `Saved as version ${result.version} of "${name}". The previous version was archived.`;
+      return `Saved as version ${outcome.version} of "${outcome.name}". The previous version was archived.`;
     case "appended":
-      return `Questions were appended to "${name}".`;
+      return `Questions were appended to "${outcome.name}".`;
     case "recreated":
-      return `"${name}" was re-created from scratch.`;
-    default:
-      return "Saved.";
+      return `"${outcome.name}" was re-created from scratch.`;
   }
 }
 
 export default function Home() {
+  const auth = useAuth();
+  const { callAction } = auth;
   const [step, setStep] = useState<AppStep>("input");
   const [loadingProgress, setLoadingProgress] = useState(0);
   const [loadingStatus, setLoadingStatus] = useState("");
   const [generatedQuestions, setGeneratedQuestions] = useState<QuestionData[]>([]);
   const [testName, setTestName] = useState<string>("");
   const [testId, setTestId] = useState<string | null>(null);
+  const [testVersion, setTestVersion] = useState<number | undefined>(undefined);
   const [reviewKey, setReviewKey] = useState(0);
   const [selectedModels, setSelectedModels] = useState<string[]>(AVAILABLE_MODELS.map((m) => m.id));
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [pendingSave, setPendingSave] = useState<{ name: string; questions: QuestionData[]; mode: SaveMode } | null>(null);
+  const cancelRef = useRef(false);
 
   const heroImage = PlaceHolderImages.find((img) => img.id === "hero-illustration");
 
-  const showReview = (questions: QuestionData[], name: string, id: string | null) => {
+  const showReview = (questions: QuestionData[], name: string, id: string | null, version?: number) => {
     setGeneratedQuestions(questions);
     setTestName(name);
     setTestId(id);
+    setTestVersion(version);
     setReviewKey((k) => k + 1);
     setStep("review");
   };
 
+  const reloadTest = async (id: string) => {
+    const result = await callAction((token) => loadTest(token, id));
+    if (result.success && result.data) {
+      showReview(result.data.questions, result.data.name, result.data.id, result.data.version);
+    } else {
+      toast({ title: "Couldn't reload the test", description: result.error, variant: "destructive" });
+    }
+  };
+
   const persist = async (name: string, questions: QuestionData[], mode: SaveMode) => {
-    const result = await saveTest(name, questions, mode);
-    if (!result.success || !result.id) {
+    const result = await callAction((token) => saveTest(token, name, questions, mode));
+    if (!result.success || !result.data) {
       toast({
         title: "Couldn't save test",
-        description: result.error ?? "Your questions are still available for review, but weren't saved.",
+        description: result.error ?? "Your questions are still shown here, but weren't saved.",
         variant: "destructive",
       });
       return;
     }
-
-    toast({ title: "Test saved", description: describeSave(result, name) });
-    if (result.warning) {
-      toast({ title: "Heads up", description: result.warning });
-    }
+    const outcome = result.data;
+    toast({ title: "Test saved", description: describeSave(outcome) });
 
     if (mode === "append") {
-      // Show the merged test so later edits don't overwrite the existing questions.
-      const merged = await loadTest(result.id);
-      if (merged.success && merged.test) {
-        showReview(merged.test.questions, merged.test.name, result.id);
-        return;
-      }
-      // Couldn't load the merged set: keep this view session-only so edits can't clobber it.
+      // Show the merged test so the review matches what's stored.
+      await reloadTest(outcome.id);
       return;
     }
-    setTestId(result.id);
-  };
-
-  const generateForModel = async (
-    model: string,
-    count: number,
-    request: GenerateRequest,
-    onQuestionDone: () => void
-  ): Promise<QuestionData[]> => {
-    const modelName = getModelOption(model)?.shortName ?? model;
-    const result = await generateMultipleChoiceQuestions({
-      documentContent: request.content,
-      model,
-      numberOfQuestions: count,
-      specialInstructions: request.recommendations || undefined,
-    });
-
-    setLoadingStatus(`${modelName} is writing distractors...`);
-    const settled = await mapWithConcurrency(result.questions, DISTRACTOR_CONCURRENCY, async (q) => {
-      try {
-        return await generateDistractors({
-          question: q.question,
-          correctAnswer: q.correctAnswer,
-          numberOfDistractors: DISTRACTORS_PER_QUESTION,
-          model,
-        });
-      } finally {
-        onQuestionDone();
-      }
-    });
-
-    return result.questions.flatMap((q, i) => {
-      const outcome = settled[i];
-      // A question without distractors isn't a usable multiple-choice question.
-      if (outcome.status !== "fulfilled" || outcome.value.length === 0) return [];
-      return [
-        {
-          id: createId(),
-          question: q.question,
-          correctAnswer: q.correctAnswer,
-          distractors: outcome.value,
-          sourceModel: model,
-        },
-      ];
-    });
+    setTestId(outcome.id);
+    setTestName(outcome.name);
+    setTestVersion(outcome.version);
   };
 
   const handleGenerate = async (request: GenerateRequest) => {
     const { testName: name, saveMode, questionCount } = request;
+    cancelRef.current = false;
     setTestName(name);
     setTestId(null);
     setStep("processing");
-    setLoadingProgress(5);
-    setLoadingStatus("AI models are reading your document...");
+    setLoadingProgress(3);
+    setLoadingStatus("Planning your test...");
 
-    // Never ask a model for zero questions when there are more models than questions.
-    const models = selectedModels.slice(0, questionCount);
-    const counts = splitEvenly(questionCount, models.length);
-    let completed = 0;
-    const onQuestionDone = () => {
-      completed++;
-      setLoadingProgress(5 + Math.min(90, Math.floor((completed / questionCount) * 90)));
-    };
+    const chunks = chunkDocument(request.content);
+    const batches = planBatches(chunks, selectedModels, questionCount);
+    let produced = 0;
+    let requested = 0;
+    const errors = new Set<string>();
 
-    const results = await Promise.allSettled(
-      models.map((model, i) => generateForModel(model, counts[i], request, onQuestionDone))
+    setLoadingStatus(
+      chunks.length > 1
+        ? `Writing questions from ${chunks.length} sections of your document...`
+        : "AI models are writing your questions..."
     );
 
-    const questions: QuestionData[] = [];
-    results.forEach((r, i) => {
-      if (r.status === "fulfilled") {
-        questions.push(...r.value);
-      } else {
-        console.error(`Generation failed for ${models[i]}:`, r.reason);
-        if (models.length > 1) {
-          toast({
-            title: `${getModelOption(models[i])?.label ?? models[i]} failed`,
-            description: "Continuing with the other selected model(s).",
-            variant: "destructive",
-          });
-        }
+    const settled = await mapWithConcurrency(batches, GENERATION_CONCURRENCY, async (batch) => {
+      if (cancelRef.current) throw new StopGeneration();
+      const result = await callAction((token) =>
+        generateQuestionBatch(token, {
+          chunk: chunks[batch.chunkIndex],
+          count: batch.count,
+          model: batch.model,
+          difficulty: request.difficulty,
+          questionTypes: request.questionTypes,
+          instructions: request.recommendations,
+        })
+      );
+      requested += batch.count;
+      setLoadingProgress(3 + Math.floor((requested / questionCount) * 92));
+      if (!result.success) {
+        // Quota and auth problems affect every remaining batch, so stop early.
+        if (result.code || result.error?.startsWith("Daily limit")) cancelRef.current = true;
+        throw new Error(result.error ?? "Generation failed.");
       }
+      produced += result.data?.length ?? 0;
+      setLoadingStatus(`${produced} of ${questionCount} questions written...`);
+      return result.data ?? [];
     });
 
-    if (questions.length === 0) {
+    void auth.refreshAccount();
+
+    const raw: QuestionData[] = [];
+    for (const outcome of settled) {
+      if (outcome.status === "fulfilled") raw.push(...outcome.value);
+      else if (!(outcome.reason instanceof StopGeneration)) errors.add(String((outcome.reason as Error)?.message ?? outcome.reason));
+    }
+    const questions = dedupeQuestions(raw).slice(0, questionCount);
+
+    if (cancelRef.current && errors.size === 0) {
+      toast({ title: "Generation cancelled", description: questions.length ? `Kept ${questions.length} questions.` : undefined });
+    }
+    if (errors.size > 0) {
       toast({
-        title: "Couldn't generate a test",
-        description: "No questions could be generated. Check your API keys, or try more or different content.",
+        title: questions.length ? "Some requests failed" : "Couldn't generate a test",
+        description: Array.from(errors).join(" "),
         variant: "destructive",
       });
+    }
+
+    if (questions.length === 0) {
       setStep("input");
       setLoadingProgress(0);
       return;
     }
 
-    if (questions.length < questionCount) {
+    const removed = raw.length - questions.length;
+    if (questions.length < questionCount && !cancelRef.current) {
       toast({
         title: "Fewer questions than requested",
-        description: `Generated ${questions.length} of ${questionCount} questions.`,
+        description: `Generated ${questions.length} of ${questionCount}${removed > 0 ? ` (${removed} near-duplicates removed)` : ""}.`,
       });
     }
 
@@ -219,7 +202,7 @@ export default function Home() {
   };
 
   const handleLoadExisting = (test: StoredTest) => {
-    showReview(test.questions, test.name, test.id);
+    showReview(test.questions, test.name, test.id, test.version);
   };
 
   const confirmSave = async () => {
@@ -247,20 +230,30 @@ export default function Home() {
     setStep("input");
     setGeneratedQuestions([]);
     setTestId(null);
+    setTestVersion(undefined);
     setLoadingProgress(0);
     setLoadingStatus("");
     setActiveTab("new");
   };
+
+  const ready = !!auth.user?.emailVerified && auth.access.status === "allowed";
+  let gate: React.ReactNode = null;
+  if (auth.loading) gate = <FullCardSpinner />;
+  else if (!auth.user) gate = <SignInCard />;
+  else if (!auth.user.emailVerified) gate = <VerifyEmailCard />;
+  else if (auth.access.status === "unknown") gate = <FullCardSpinner />;
+  else if (auth.access.status === "forbidden") gate = <AccessProblemCard message={auth.access.message} />;
+  else if (auth.access.status === "error") gate = <AccessProblemCard message={auth.access.message} retry={auth.refreshAccount} />;
+
+  const currentStep: AppStep = ready ? step : "input";
 
   return (
     <div className="flex flex-col min-h-screen selection:bg-accent/30">
       <Navbar selectedModels={selectedModels} onModelsChange={setSelectedModels} onHome={reset} />
 
       <main className="flex-1">
-        {/* Hero Section */}
-        {step === "input" && (
+        {currentStep === "input" && (
           <div className="relative overflow-hidden bg-primary pt-12 pb-32 lg:pt-20 lg:pb-40">
-            {/* Background elements */}
             <div className="absolute top-0 right-0 -translate-y-1/2 translate-x-1/2 w-96 h-96 bg-accent/20 rounded-full blur-3xl" />
             <div className="absolute bottom-0 left-0 translate-y-1/2 -translate-x-1/2 w-64 h-64 bg-white/10 rounded-full blur-2xl" />
 
@@ -277,23 +270,17 @@ export default function Home() {
                       Turn Documents into <span className="text-accent">Perfect Exams</span>
                     </h1>
                     <p className="text-lg md:text-xl text-primary-foreground/80">
-                      TestMaker reads your documents and instantly crafts high-quality multiple-choice questions with plausible distractors.
+                      TestMaker reads your documents and crafts multiple-choice and true/false questions with plausible distractors, explanations and source quotes.
                     </p>
                   </div>
 
                   <div className="flex flex-wrap justify-center lg:justify-start gap-6 pt-4">
-                    <div className="flex items-center gap-2 text-white/90">
-                      <CheckCircle2 className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-medium">Instant Analysis</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/90">
-                      <CheckCircle2 className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-medium">Smart Distractors</span>
-                    </div>
-                    <div className="flex items-center gap-2 text-white/90">
-                      <CheckCircle2 className="h-5 w-5 text-accent" />
-                      <span className="text-sm font-medium">Export Ready</span>
-                    </div>
+                    {["Instant Analysis", "Smart Distractors", "Export Ready"].map((label) => (
+                      <div key={label} className="flex items-center gap-2 text-white/90">
+                        <CheckCircle2 className="h-5 w-5 text-accent" />
+                        <span className="text-sm font-medium">{label}</span>
+                      </div>
+                    ))}
                   </div>
                 </div>
 
@@ -318,40 +305,43 @@ export default function Home() {
           </div>
         )}
 
-        <div className={`container mx-auto px-4 ${step === "input" ? "-mt-20 lg:-mt-24" : "py-12"}`}>
+        <div className={`container mx-auto px-4 ${currentStep === "input" ? "-mt-20 lg:-mt-24" : "py-12"}`}>
           <div className="max-w-5xl mx-auto">
-            {step === "input" && (
+            {currentStep === "input" && (
               <div className="space-y-6">
-                <div className="flex justify-center w-full">
-                  <div className="flex p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl relative z-30 w-full max-w-sm sm:w-auto sm:inline-flex">
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("new")}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === "new" ? "bg-white text-primary shadow-lg scale-105" : "text-white hover:bg-white/10"}`}
-                    >
-                      <Plus className="h-4 w-4" /> Create New Test
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setActiveTab("library")}
-                      className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === "library" ? "bg-white text-primary shadow-lg scale-105" : "text-white hover:bg-white/10"}`}
-                    >
-                      <Library className="h-4 w-4" /> My Library
-                    </button>
+                {ready && (
+                  <div className="flex justify-center w-full">
+                    <div className="flex p-1 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-xl relative z-30 w-full max-w-sm sm:w-auto sm:inline-flex">
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("new")}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === "new" ? "bg-white text-primary shadow-lg scale-105" : "text-white hover:bg-white/10"}`}
+                      >
+                        <Plus className="h-4 w-4" /> Create New Test
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setActiveTab("library")}
+                        className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 sm:px-6 py-3 rounded-xl text-sm font-bold transition-all ${activeTab === "library" ? "bg-white text-primary shadow-lg scale-105" : "text-white hover:bg-white/10"}`}
+                      >
+                        <Library className="h-4 w-4" /> My Library
+                      </button>
+                    </div>
                   </div>
-                </div>
+                )}
 
                 <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100 relative z-20">
-                  {activeTab === "new" ? (
-                    <FileUploader onContentReady={handleGenerate} />
-                  ) : (
-                    <TestLibrary onSelectTest={handleLoadExisting} />
-                  )}
+                  {gate ??
+                    (activeTab === "new" ? (
+                      <FileUploader onContentReady={handleGenerate} />
+                    ) : (
+                      <TestLibrary onSelectTest={handleLoadExisting} />
+                    ))}
                 </div>
               </div>
             )}
 
-            {step === "processing" && (
+            {currentStep === "processing" && (
               <div className="bg-white rounded-2xl shadow-xl p-12 text-center space-y-10 animate-in zoom-in-95 duration-500 border border-slate-100">
                 <div className="relative w-24 h-24 mx-auto">
                   <div className="absolute inset-0 border-4 border-primary/20 rounded-full animate-ping" />
@@ -367,11 +357,22 @@ export default function Home() {
                     <Progress value={loadingProgress} className="h-2 bg-slate-100" />
                     <p className="text-xs text-right font-medium text-primary">{loadingProgress}% Complete</p>
                   </div>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="text-muted-foreground"
+                    onClick={() => {
+                      cancelRef.current = true;
+                      setLoadingStatus("Cancelling after the current requests finish...");
+                    }}
+                  >
+                    <X className="h-4 w-4 mr-1" /> Cancel
+                  </Button>
                 </div>
               </div>
             )}
 
-            {step === "review" && (
+            {currentStep === "review" && (
               <TestPreview
                 key={reviewKey}
                 questions={generatedQuestions}
@@ -379,6 +380,8 @@ export default function Home() {
                 onReset={reset}
                 testId={testId}
                 testName={testName}
+                version={testVersion}
+                onReload={() => testId && reloadTest(testId)}
               />
             )}
           </div>
@@ -394,14 +397,7 @@ export default function Home() {
               </div>
               <span className="text-xl font-bold font-headline text-white">TestMaker</span>
             </button>
-            <p className="text-slate-400 text-sm">
-              © {new Date().getFullYear()} TestMaker AI. Designed for intelligent assessment.
-            </p>
-            <div className="flex gap-6">
-              <a href="#" className="text-slate-400 hover:text-accent transition-colors">Privacy</a>
-              <a href="#" className="text-slate-400 hover:text-accent transition-colors">Terms</a>
-              <a href="#" className="text-slate-400 hover:text-accent transition-colors">Support</a>
-            </div>
+            <p className="text-slate-400 text-sm">© {new Date().getFullYear()} TestMaker AI. Designed for intelligent assessment.</p>
           </div>
         </div>
       </footer>

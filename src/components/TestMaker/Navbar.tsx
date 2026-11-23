@@ -1,7 +1,9 @@
 "use client";
 
-import { GraduationCap, Zap, Cpu, Check, type LucideIcon } from "lucide-react";
+import { GraduationCap, Zap, Cpu, Check, LogOut, type LucideIcon } from "lucide-react";
 import { AVAILABLE_MODELS } from "@/ai/models";
+import { useAuth } from "@/components/auth/AuthProvider";
+import { Button } from "@/components/ui/button";
 
 interface NavbarProps {
   selectedModels: string[];
@@ -16,6 +18,9 @@ const MODEL_STYLES: Record<string, { icon: LucideIcon; checked: string; iconColo
 const FALLBACK_STYLE = { icon: Cpu, checked: "bg-primary border-primary", iconColor: "text-primary" };
 
 export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) {
+  const { user, access, signOut } = useAuth();
+  const account = access.status === "allowed" ? access.account : null;
+
   const toggleModel = (model: string) => {
     if (selectedModels.includes(model)) {
       // At least one model must stay selected.
@@ -37,6 +42,8 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
           <span className="hidden sm:inline text-xl font-bold tracking-tight text-primary font-headline">TestMaker</span>
         </button>
 
+        <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        {account && (
         <div role="group" aria-label="AI models" className="flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">
           {AVAILABLE_MODELS.map((model) => {
             const selected = selectedModels.includes(model.id);
@@ -60,6 +67,25 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
               </button>
             );
           })}
+        </div>
+        )}
+        {user && (
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="hidden md:flex flex-col items-end leading-tight min-w-0">
+              <span className="text-xs font-medium text-slate-700 truncate max-w-[180px]" title={user.email ?? undefined}>
+                {user.email}
+              </span>
+              {account && (
+                <span className="text-[10px] text-muted-foreground" title="Questions generated today / daily limit">
+                  {account.usedToday} / {account.dailyLimit} today
+                </span>
+              )}
+            </div>
+            <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" title="Sign out" className="text-slate-500">
+              <LogOut className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
         </div>
       </div>
     </header>

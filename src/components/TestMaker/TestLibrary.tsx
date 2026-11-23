@@ -5,7 +5,8 @@ import { FileJson, Calendar, ChevronRight, Search, RefreshCw, Trash2, Loader2 } 
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { listTests, loadTest, deleteTest } from "@/app/actions/load-test";
+import { listTests, loadTest, deleteTest } from "@/app/actions/tests";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { StoredTest, TestSummary } from "@/lib/types";
@@ -21,18 +22,19 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
   const [openingId, setOpeningId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
   const { toast } = useToast();
+  const { callAction } = useAuth();
 
   const fetchTests = useCallback(async () => {
     setLoading(true);
-    const result = await listTests();
+    const result = await callAction(listTests);
     if (result.success) {
-      setTests(result.tests ?? []);
+      setTests(result.data ?? []);
       setLoadError(null);
     } else {
-      setLoadError("Couldn't reach the test library. Check your Firebase configuration and try again.");
+      setLoadError(result.error ?? "Couldn't reach the test library. Please try again.");
     }
     setLoading(false);
-  }, []);
+  }, [callAction]);
 
   useEffect(() => {
     // Data fetching on mount; state updates happen after the await resolves.
@@ -42,10 +44,10 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
 
   const handleLoad = async (testId: string) => {
     setOpeningId(testId);
-    const result = await loadTest(testId);
+    const result = await callAction((token) => loadTest(token, testId));
     setOpeningId(null);
-    if (result.success && result.test) {
-      onSelectTest(result.test);
+    if (result.success && result.data) {
+      onSelectTest(result.data);
     } else {
       toast({ title: "Couldn't open test", description: result.error ?? "Unknown error.", variant: "destructive" });
     }
@@ -53,7 +55,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
 
   const handleDelete = async (testId: string, name: string) => {
     if (!confirm(`Are you sure you want to delete "${name}"? This also removes its archived versions.`)) return;
-    const result = await deleteTest(testId);
+    const result = await callAction((token) => deleteTest(token, testId));
     if (result.success) {
       toast({ title: "Test Deleted", description: `"${name}" has been removed.` });
       setTests((prev) => prev.filter((t) => t.id !== testId));
@@ -103,7 +105,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
       ) : (
         <div className="grid gap-4">
           {filteredTests.map((test) => (
-            <Card key={test.id} className="group hover:border-primary/40 hover:shadow-md transition-all duration-300">
+            <Card key={test.id} data-testid="library-item" className="group hover:border-primary/40 hover:shadow-md transition-all duration-300">
               <CardContent className="p-0">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 sm:p-5 gap-4">
                   <div className="flex items-start sm:items-center gap-4 min-w-0">

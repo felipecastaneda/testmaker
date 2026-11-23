@@ -1,22 +1,12 @@
 rules_version = '2';
 
+// All data access goes through the Next.js server (firebase-admin), which enforces
+// authentication, the email allow-list and per-test ownership. Browsers never read
+// or write Firestore directly, so client access is denied outright.
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Allow users to manage their tests
-    match /tests/{testId} {
-      // For now, allowing all access during prototype development.
-      // In production, change this to: if request.auth != null;
-      allow read, write: if true;
-
-      // Archived copies created by the "New Version" save strategy.
-      match /versions/{versionId} {
-        allow read, write: if true;
-      }
-    }
-
-    // Default rule for everything else
     match /{document=**} {
-      allow read, write: if request.auth != null;
+      allow read, write: if false;
     }
   }
 }

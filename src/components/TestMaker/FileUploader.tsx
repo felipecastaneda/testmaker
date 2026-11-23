@@ -6,9 +6,11 @@ import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { listTests } from "@/app/actions/load-test";
+import { listTests } from "@/app/actions/tests";
+import { useAuth } from "@/components/auth/AuthProvider";
 import { extractTextFromFile, SUPPORTED_EXTENSIONS } from "@/lib/document-parser";
-import type { SaveMode } from "@/lib/types";
+import { MAX_DOCUMENT_CHARS } from "@/lib/generation";
+import type { DifficultySetting, QuestionType, SaveMode } from "@/lib/types";
 
 export interface GenerateRequest {
   content: string;
@@ -16,6 +18,8 @@ export interface GenerateRequest {
   saveMode: SaveMode;
   questionCount: number;
   recommendations: string;
+  difficulty: DifficultySetting;
+  questionTypes: QuestionType[];
 }
 
 interface FileUploaderProps {
@@ -23,8 +27,18 @@ interface FileUploaderProps {
 }
 
 const MIN_CONTENT_LENGTH = 50;
-/** Roughly 50k tokens; beyond this, generation gets slow and expensive. */
-const LARGE_CONTENT_WARNING = 200_000;
+
+const DIFFICULTIES: { id: DifficultySetting; label: string }[] = [
+  { id: "mixed", label: "Mixed" },
+  { id: "easy", label: "Easy" },
+  { id: "medium", label: "Medium" },
+  { id: "hard", label: "Hard" },
+];
+
+const QUESTION_TYPES: { id: QuestionType; label: string }[] = [
+  { id: "multiple_choice", label: "Multiple choice" },
+  { id: "true_false", label: "True / False" },
+];
 
 const SAVE_MODES: { id: SaveMode; label: string; help: string; activeClass: string }[] = [
   {
@@ -57,17 +71,27 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
+  const [difficulty, setDifficulty] = useState<DifficultySetting>("mixed");
+  const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(["multiple_choice"]);
+  const { callAction } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
-    listTests().then((result) => {
+    callAction(listTests).then((result) => {
       if (cancelled || !result.success) return;
-      setExistingTestNames(Array.from(new Set(result.tests?.map((t) => t.name) ?? [])));
+      setExistingTestNames(Array.from(new Set(result.data?.map((t) => t.name) ?? [])));
     });
     return () => {
       cancelled = true;
     };
-  }, []);
+  }, [callAction]);
+
+  const toggleType = (type: QuestionType) => {
+    setQuestionTypes((prev) => {
+      if (prev.includes(type)) return prev.length > 1 ? prev.filter((t) => t !== type) : prev;
+      return [...prev, type];
+    });
+  };
 
   const targetsExistingTest = saveMode === "append" || saveMode === "recreate";
 
@@ -115,7 +139,8 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
 
   const trimmedContent = content.trim();
   const missingTarget = targetsExistingTest && !testName;
-  const canGenerate = trimmedContent.length >= MIN_CONTENT_LENGTH && !missingTarget && !isParsing;
+  const tooLong = trimmedContent.length > MAX_DOCUMENT_CHARS;
+  const canGenerate = trimmedContent.length >= MIN_CONTENT_LENGTH && !tooLong && !missingTarget && !isParsing;
 
   const submit = () => {
     if (!canGenerate) return;
@@ -125,6 +150,8 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
       saveMode,
       questionCount,
       recommendations: recommendations.trim(),
+      difficulty,
+      questionTypes,
     });
   };
 
@@ -217,10 +244,55 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
                   onChange={(e) => setQuestionCount(parseInt(e.target.value, 10))}
                   className="w-24 sm:w-32 h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer accent-primary"
                 />
-                <div className="bg-primary text-white font-bold px-2 sm:px-3 py-1 rounded-lg text-xs sm:text-sm min-w-[2.5rem] sm:min-w-[3rem] text-center shadow-sm">
-                  {questionCount}
-                </div>
+                <input
+                  type="number"
+                  aria-label="Number of questions"
+                  min={1}
+                  max={100}
+                  value={questionCount}
+                  onChange={(e) => {
+                    const n = parseInt(e.target.value, 10);
+                    if (Number.isFinite(n)) setQuestionCount(Math.min(100, Math.max(1, n)));
+                  }}
+                  className="bg-primary text-white font-bold px-1 py-1 rounded-lg text-xs sm:text-sm w-[3.25rem] text-center shadow-sm outline-none focus:ring-2 focus:ring-primary/40 [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none"
+                />
               </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="grid md:grid-cols-2 gap-6">
+          <div className="space-y-2">
+            <span className="text-sm font-bold text-slate-800">Difficulty</span>
+            <div role="radiogroup" aria-label="Difficulty" className="flex p-1 bg-white border border-slate-200 rounded-xl gap-1">
+              {DIFFICULTIES.map((d) => (
+                <button
+                  key={d.id}
+                  type="button"
+                  role="radio"
+                  aria-checked={difficulty === d.id}
+                  onClick={() => setDifficulty(d.id)}
+                  className={`flex-1 px-2 py-1.5 text-xs font-bold rounded-lg transition-all ${difficulty === d.id ? "bg-primary text-white shadow" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  {d.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="space-y-2">
+            <span className="text-sm font-bold text-slate-800">Question types</span>
+            <div role="group" aria-label="Question types" className="flex p-1 bg-white border border-slate-200 rounded-xl gap-1">
+              {QUESTION_TYPES.map((t) => (
+                <button
+                  key={t.id}
+                  type="button"
+                  aria-pressed={questionTypes.includes(t.id)}
+                  onClick={() => toggleType(t.id)}
+                  className={`flex-1 px-2 py-1.5 text-xs font-bold rounded-lg transition-all ${questionTypes.includes(t.id) ? "bg-primary text-white shadow" : "text-slate-500 hover:text-slate-700"}`}
+                >
+                  {t.label}
+                </button>
+              ))}
             </div>
           </div>
         </div>
@@ -238,6 +310,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
             className="bg-white border-indigo-100 text-sm min-h-[80px]"
             value={recommendations}
             onChange={(e) => setRecommendations(e.target.value)}
+            maxLength={2000}
           />
         </div>
 
@@ -311,12 +384,12 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
         </Alert>
       )}
 
-      {trimmedContent.length > LARGE_CONTENT_WARNING && (
-        <Alert variant="default" className="bg-amber-50 border-amber-200">
-          <AlertCircle className="h-4 w-4 text-amber-600" />
-          <AlertTitle className="text-amber-800">Large document</AlertTitle>
-          <AlertDescription className="text-amber-700">
-            This is a lot of text. Generation may be slow or exceed model limits; consider trimming it to the relevant sections.
+      {tooLong && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Document too long</AlertTitle>
+          <AlertDescription>
+            The limit is {MAX_DOCUMENT_CHARS.toLocaleString()} characters ({trimmedContent.length.toLocaleString()} provided). Trim it to the relevant sections.
           </AlertDescription>
         </Alert>
       )}
