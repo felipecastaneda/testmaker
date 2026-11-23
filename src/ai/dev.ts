@@ -1,5 +1,5 @@
 import { config } from 'dotenv';
+config({ path: '.env.local' });
 config();
 
-import '@/ai/flows/generate-distractors.ts';
-import '@/ai/flows/generate-multiple-choice-questions.ts';
+import '@/ai/flows/generate-question-set';

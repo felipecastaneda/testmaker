@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
-import { getAuth } from "firebase/auth";
-import { getFirestore } from "firebase/firestore";
-import { getStorage } from "firebase/storage";
+import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 
+// The browser only talks to Firebase Auth. All Firestore access happens on the
+// server (src/server) through firebase-admin, behind auth + ownership checks.
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
@@ -12,10 +12,16 @@ const firebaseConfig = {
   appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
 };
 
-// Initialize Firebase
-const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
-const storage = getStorage(app);
+let auth: Auth | undefined;
 
-export { app, auth, db, storage };
+export function clientAuth(): Auth {
+  if (!auth) {
+    const app = getApps().length > 0 ? getApp() : initializeApp(firebaseConfig);
+    auth = getAuth(app);
+    const emulatorHost = process.env.NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST;
+    if (emulatorHost) {
+      connectAuthEmulator(auth, `http://${emulatorHost}`, { disableWarnings: true });
+    }
+  }
+  return auth;
+}
