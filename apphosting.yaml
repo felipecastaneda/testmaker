@@ -27,10 +27,8 @@ env:
     availability: [ "BUILD", "RUNTIME" ]
   - variable: GOOGLE_GENAI_API_KEY
     secret: google_genai_api_key
-    availability: [ "RUNTIME" ]
   - variable: OPENAI_API_KEY
     secret: openai_api_key
-    availability: [ "RUNTIME" ]
   - variable: ALLOWED_EMAILS
     secret: allowed_emails
   - variable: LEGACY_OWNER_EMAIL
