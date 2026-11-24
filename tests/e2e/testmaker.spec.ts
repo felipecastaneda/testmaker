@@ -1,6 +1,7 @@
 import { expect, test, type Browser, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { E2E } from "../../playwright.config";
+import { makePdf, makePptx } from "../fixtures/make-docs";
 import { getUid, readDoc, resetEmulators, seedLegacyTest, unauthenticatedRead, verifyEmail, writeDoc } from "./emulators";
 
 const STUDY_TEXT = [
@@ -161,6 +162,43 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("button", { name: "Delete Legacy Study Guide" }).click();
     await expect(page.getByText("Test Deleted", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Legacy Study Guide" })).toHaveCount(0);
+  });
+
+  test("upload a PowerPoint deck and a PDF and generate from them", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("button", { name: "Create New Test" }).click();
+    const upload = page.locator("#file-upload");
+    const content = page.getByLabel("Or Paste Content Directly");
+
+    const deck = await makePptx([
+      { lines: ["Cell organelles", "The mitochondria is the powerhouse of the cell and produces most of its ATP."] },
+      { lines: ["Ribosomes are the molecular machines that assemble proteins from amino acids."], notes: ["The Golgi apparatus modifies, sorts and packages proteins."] },
+    ]);
+    await upload.setInputFiles({ name: "Organelles_Lecture.pptx", mimeType: "application/octet-stream", buffer: Buffer.from(deck) });
+    await expect(content).toHaveValue(/^--- Slide 1 ---\nCell organelles/);
+    await expect(content).toHaveValue(/Speaker notes:\nThe Golgi apparatus modifies/);
+    await expect(page.getByLabel("Test Name")).toHaveValue("Organelles Lecture");
+
+    // The PDF library loads on demand in the browser.
+    const pdf = makePdf([
+      ["Photosynthesis takes place in the chloroplasts of plant cells.", "Light energy is converted into chemical energy stored in glucose."],
+      ["The Calvin cycle fixes carbon dioxide into sugars without needing light directly."],
+    ]);
+    await upload.setInputFiles({ name: "photosynthesis.pdf", mimeType: "application/pdf", buffer: Buffer.from(pdf) });
+    await expect(content).toHaveValue(/^--- Page 1 ---\nPhotosynthesis takes place in the chloroplasts/);
+    await expect(content).toHaveValue(/--- Page 2 ---\nThe Calvin cycle fixes carbon dioxide/);
+
+    await page.getByLabel("Test Name").fill("PDF Quiz");
+    await page.getByLabel("Number of questions").fill("2");
+    await page.getByRole("button", { name: "Generate Questions" }).click();
+    await expect(page.getByRole("heading", { name: "PDF Quiz" })).toBeVisible();
+    await expect(page.getByTestId("question-card")).toHaveCount(2);
+
+    // A scanned PDF (no text) gets a clear explanation.
+    await page.getByRole("button", { name: "Back to start" }).click();
+    await page.getByRole("button", { name: "Create New Test" }).click();
+    await page.locator("#file-upload").setInputFiles({ name: "scan.pdf", mimeType: "application/pdf", buffer: Buffer.from(makePdf([[]])) });
+    await expect(page.getByText("This PDF looks scanned", { exact: false })).toBeVisible();
   });
 
   test("points and tags: course default, AI tags, editing, weighted score", async ({ page }) => {

@@ -267,8 +267,9 @@ There are no students yet, but the projection is added and tested now:
   collect `<a:t>` text per paragraph. Also read `ppt/notesSlides/notesSlideN.xml` (speaker
   notes often hold the real content). Output `--- Slide N ---` headings so source quotes
   stay locatable.
-- **PDF**: `pdfjs-dist`, **loaded on demand** only when a PDF is picked, with the worker
-  served from `/public`. Page text is joined with `--- Page N ---` markers. If fewer than about
+- **PDF**: `pdfjs-dist` (legacy build), **loaded on demand** only when a PDF is picked. Its
+  worker module is imported alongside it and runs on the main thread (`globalThis.pdfjsWorker`),
+  because Next.js can't reliably bundle a separate worker file. Page text is joined with `--- Page N ---` markers. If fewer than about
   100 characters come out of a multi-page PDF, show "This PDF looks scanned (images only).
   Text recognition isn't supported yet". OCR or vision comes in a later step.
 - Both keep the existing 400k-character cap. `SUPPORTED_EXTENSIONS` and the uploader's
