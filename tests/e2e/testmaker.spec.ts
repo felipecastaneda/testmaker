@@ -1,7 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { E2E } from "../../playwright.config";
-import { resetEmulators, seedLegacyTest, unauthenticatedRead, verifyEmail } from "./emulators";
+import { getUid, readDoc, resetEmulators, seedLegacyTest, unauthenticatedRead, verifyEmail, writeDoc } from "./emulators";
 
 const STUDY_TEXT = [
   "The mitochondria is the powerhouse of the cell and produces most of its ATP.",
@@ -71,6 +71,12 @@ test.describe.serial("TestMaker", () => {
     await expect(page.getByRole("heading", { name: "Legacy Study Guide" })).toBeVisible();
     await expect(page.getByTestId("question-card")).toHaveCount(2);
     await expect(page.getByText("What directory does the App Router use?")).toBeVisible();
+
+    // First sign-in created a personal workspace, and the legacy test lives in its course.
+    const uid = await getUid(E2E.teacher);
+    expect(await readDoc(`orgs/p_${uid}`)).toMatchObject({ kind: "personal" });
+    expect(await readDoc(`orgs/p_${uid}/members/${uid}`)).toMatchObject({ role: "owner", orgKind: "personal" });
+    expect(await readDoc("tests/legacy_study_guide")).toMatchObject({ ownerId: uid, courseId: `p_${uid}_default` });
   });
 
   test("generate, edit, take, export, version and restore a test", async ({ page }) => {
@@ -137,5 +143,41 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("button", { name: "Delete Legacy Study Guide" }).click();
     await expect(page.getByText("Test Deleted", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Legacy Study Guide" })).toHaveCount(0);
+  });
+
+  test("another allow-listed user gets a separate workspace", async ({ page }) => {
+    await signUp(page, E2E.colleague);
+    await expect(page.getByRole("button", { name: "Create New Test" })).toBeVisible();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await expect(page.getByText("You haven't generated any tests yet.")).toBeVisible();
+    await expect(page.getByText("Cell Biology")).toHaveCount(0);
+  });
+
+  test("an institution member gets in without being allow-listed", async ({ page }) => {
+    await signUp(page, E2E.invitee);
+    await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+
+    const uid = await getUid(E2E.invitee);
+    await writeDoc("orgs/inst_e2e", { name: "E2E University", kind: "institution" });
+    await writeDoc(`orgs/inst_e2e/members/${uid}`, {
+      uid,
+      email: E2E.invitee,
+      orgId: "inst_e2e",
+      orgKind: "institution",
+      role: "instructor",
+    });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Create New Test" })).toBeVisible();
+    // Being in an institution doesn't expose anyone else's tests.
+    await page.getByRole("button", { name: "My Library" }).click();
+    await expect(page.getByText("You haven't generated any tests yet.")).toBeVisible();
+  });
+
+  test("the platform allow-list in Firestore grants access", async ({ page }) => {
+    await signIn(page, E2E.outsider);
+    await expect(page.getByRole("heading", { name: "No access" })).toBeVisible();
+    await writeDoc("_meta/platform", { signupMode: "allowlist", allowedEmails: [E2E.outsider] });
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Create New Test" })).toBeVisible();
   });
 });

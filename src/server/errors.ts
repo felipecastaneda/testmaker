@@ -1,0 +1,2 @@
+/** Errors whose message is safe and useful to show the user. */
+export class UserFacingError extends Error {}

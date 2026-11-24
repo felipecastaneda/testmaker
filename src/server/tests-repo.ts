@@ -1,8 +1,11 @@
 import "server-only";
 import { FieldValue, type DocumentReference, type Firestore } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
-import { UserFacingError } from "./action-result";
+import type { AuthedUser } from "./auth";
+import { UserFacingError } from "./errors";
+import { requireCourseAccess } from "./workspace";
 import type {
+  CourseAccessNeed,
   QuestionData,
   SaveMode,
   SaveTestOutcome,
@@ -13,7 +16,7 @@ import type {
 
 /*
  * Data model
- *   tests/{testId}                              { ownerId, name, nameKey, version, generatedAt, updatedAt, questionCount }
+ *   tests/{testId}                              { ownerId, orgId, courseId, name, nameKey, version, generatedAt, updatedAt, questionCount }
  *   tests/{testId}/questions/{questionId}       QuestionData + { position }
  *   tests/{testId}/versions/v{n}               { version, archivedAt, generatedAt, questionCount }
  *   tests/{testId}/versions/v{n}/questions/{id} QuestionData + { position }
@@ -21,8 +24,12 @@ import type {
  * Questions live in a subcollection so a test isn't capped by Firestore's 1 MB document
  * limit, and so editing one question never rewrites (or races with) the others.
  *
+ * Access is decided by the test's course (see workspace.ts); ownerId records who created it.
+ * Names are unique per course.
+ *
  * Legacy documents (pre-accounts) have no ownerId and keep questions in an array field;
- * migrateLegacyTests() converts them.
+ * migrateLegacyTests() converts them. Tests from before organizations have no courseId;
+ * ensureUserWorkspace() moves them into their owner's default course.
  */
 
 const TESTS = "tests";
@@ -78,19 +85,22 @@ async function readQuestions(parent: DocumentReference): Promise<QuestionData[]>
   return snap.docs.map((d) => fromStored(d.data()));
 }
 
-async function getOwnedTestRef(ownerId: string, testId: string): Promise<DocumentReference> {
-  if (!testId || testId.includes("/")) throw new UserFacingError("Test not found.");
+const TEST_NOT_FOUND = "Test not found.";
+
+async function getTestRef(user: AuthedUser, testId: string, need: CourseAccessNeed): Promise<DocumentReference> {
+  if (typeof testId !== "string" || !testId || testId.includes("/")) throw new UserFacingError(TEST_NOT_FOUND);
   const ref = adminDb().collection(TESTS).doc(testId);
   const snap = await ref.get();
-  // Same message for "missing" and "someone else's" so ids can't be probed.
-  if (!snap.exists || snap.get("ownerId") !== ownerId) throw new UserFacingError("Test not found.");
+  // Same message for "missing" and "not yours" so ids can't be probed.
+  if (!snap.exists) throw new UserFacingError(TEST_NOT_FOUND);
+  await requireCourseAccess(user, snap.get("courseId"), need, TEST_NOT_FOUND);
   return ref;
 }
 
-async function findByName(ownerId: string, name: string) {
+async function findByName(courseId: string, name: string) {
   const snap = await adminDb()
     .collection(TESTS)
-    .where("ownerId", "==", ownerId)
+    .where("courseId", "==", courseId)
     .where("nameKey", "==", toNameKey(name))
     .limit(1)
     .get();
@@ -101,9 +111,15 @@ async function findByName(ownerId: string, name: string) {
 // Reads
 // ---------------------------------------------------------------------------
 
-export async function listTests(ownerId: string): Promise<TestSummary[]> {
-  const snap = await adminDb().collection(TESTS).where("ownerId", "==", ownerId).get();
-  return snap.docs
+/** Firestore "in" queries accept at most 30 values. */
+const IN_LIMIT = 30;
+
+export async function listTests(courseIds: string[]): Promise<TestSummary[]> {
+  const chunks: string[][] = [];
+  for (let i = 0; i < courseIds.length; i += IN_LIMIT) chunks.push(courseIds.slice(i, i + IN_LIMIT));
+  const snaps = await Promise.all(chunks.map((ids) => adminDb().collection(TESTS).where("courseId", "in", ids).get()));
+  return snaps
+    .flatMap((snap) => snap.docs)
     .map((d) => {
       const data = d.data();
       return {
@@ -118,8 +134,8 @@ export async function listTests(ownerId: string): Promise<TestSummary[]> {
     .sort((a, b) => (b.updatedAt ?? "").localeCompare(a.updatedAt ?? ""));
 }
 
-export async function loadTest(ownerId: string, testId: string): Promise<StoredTest> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function loadTest(user: AuthedUser, testId: string): Promise<StoredTest> {
+  const ref = await getTestRef(user, testId, "view");
   const [snap, questions] = await Promise.all([ref.get(), readQuestions(ref)]);
   const data = snap.data()!;
   return {
@@ -132,8 +148,8 @@ export async function loadTest(ownerId: string, testId: string): Promise<StoredT
   };
 }
 
-export async function listVersions(ownerId: string, testId: string): Promise<TestVersionSummary[]> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function listVersions(user: AuthedUser, testId: string): Promise<TestVersionSummary[]> {
+  const ref = await getTestRef(user, testId, "view");
   const snap = await ref.collection(VERSIONS).orderBy("version", "desc").get();
   return snap.docs.map((d) => ({
     version: d.get("version"),
@@ -172,7 +188,8 @@ async function replaceWithNewVersion(ref: DocumentReference, questions: Question
 }
 
 export async function saveTest(
-  ownerId: string,
+  user: AuthedUser,
+  courseId: string,
   rawName: string,
   questions: QuestionData[],
   mode: SaveMode
@@ -180,13 +197,16 @@ export async function saveTest(
   const db = adminDb();
   const name = rawName.trim();
   if (!/[a-z0-9]/i.test(name)) throw new UserFacingError("Please give the test a name containing letters or numbers.");
+  const { orgId } = await requireCourseAccess(user, courseId, "edit");
   const now = new Date().toISOString();
-  const existing = await findByName(ownerId, name);
+  const existing = await findByName(courseId, name);
 
   const create = async (): Promise<SaveTestOutcome> => {
     const ref = db.collection(TESTS).doc();
     await ref.set({
-      ownerId,
+      ownerId: user.uid,
+      orgId,
+      courseId,
       name,
       nameKey: toNameKey(name),
       version: 1,
@@ -228,8 +248,8 @@ export async function saveTest(
   return { id: ref.id, name: existingName, version, mode: "version_bumped" };
 }
 
-export async function updateQuestion(ownerId: string, testId: string, question: QuestionData): Promise<void> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function updateQuestion(user: AuthedUser, testId: string, question: QuestionData): Promise<void> {
+  const ref = await getTestRef(user, testId, "edit");
   const qRef = ref.collection(QUESTIONS).doc(safeQuestionId(question.id, 0));
   const existing = await qRef.get();
   if (!existing.exists) throw new UserFacingError("That question no longer exists.");
@@ -238,17 +258,17 @@ export async function updateQuestion(ownerId: string, testId: string, question: 
   await ref.update({ updatedAt: new Date().toISOString() });
 }
 
-export async function deleteQuestion(ownerId: string, testId: string, questionId: string): Promise<void> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function deleteQuestion(user: AuthedUser, testId: string, questionId: string): Promise<void> {
+  const ref = await getTestRef(user, testId, "edit");
   const qRef = ref.collection(QUESTIONS).doc(safeQuestionId(questionId, 0));
   if (!(await qRef.get()).exists) return;
   await qRef.delete();
   await ref.update({ questionCount: FieldValue.increment(-1), updatedAt: new Date().toISOString() });
 }
 
-export async function reorderQuestions(ownerId: string, testId: string, orderedIds: string[]): Promise<void> {
+export async function reorderQuestions(user: AuthedUser, testId: string, orderedIds: string[]): Promise<void> {
   const db = adminDb();
-  const ref = await getOwnedTestRef(ownerId, testId);
+  const ref = await getTestRef(user, testId, "edit");
   const snap = await ref.collection(QUESTIONS).select().get();
   const existingIds = new Set(snap.docs.map((d) => d.id));
   if (orderedIds.length !== existingIds.size || !orderedIds.every((id) => existingIds.has(id))) {
@@ -260,16 +280,16 @@ export async function reorderQuestions(ownerId: string, testId: string, orderedI
   await ref.update({ updatedAt: new Date().toISOString() });
 }
 
-export async function restoreVersion(ownerId: string, testId: string, version: number): Promise<number> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function restoreVersion(user: AuthedUser, testId: string, version: number): Promise<number> {
+  const ref = await getTestRef(user, testId, "edit");
   const versionRef = ref.collection(VERSIONS).doc(`v${version}`);
   if (!(await versionRef.get()).exists) throw new UserFacingError(`Version ${version} wasn't found.`);
   const questions = await readQuestions(versionRef);
   return replaceWithNewVersion(ref, questions, new Date().toISOString());
 }
 
-export async function deleteTest(ownerId: string, testId: string): Promise<void> {
-  const ref = await getOwnedTestRef(ownerId, testId);
+export async function deleteTest(user: AuthedUser, testId: string): Promise<void> {
+  const ref = await getTestRef(user, testId, "edit");
   await adminDb().recursiveDelete(ref);
 }
 
@@ -313,10 +333,14 @@ export async function getDailyUsage(ownerId: string): Promise<number> {
 // ---------------------------------------------------------------------------
 
 /**
- * Give tests created before accounts existed to `ownerId`, converting their inline
- * `questions` arrays (and those of archived versions) to subcollections. Idempotent.
+ * Give tests created before accounts existed to `ownerId` (in course `placement`),
+ * converting their inline `questions` arrays (and those of archived versions) to
+ * subcollections. Idempotent.
  */
-export async function migrateLegacyTests(ownerId: string): Promise<number> {
+export async function migrateLegacyTests(
+  ownerId: string,
+  placement: { orgId: string; courseId: string }
+): Promise<number> {
   const db = adminDb();
   const marker = db.collection("_meta").doc("legacyMigration");
   if ((await marker.get()).get("done")) return 0;
@@ -342,6 +366,8 @@ export async function migrateLegacyTests(ownerId: string): Promise<number> {
     const name: string = data.name || doc.id;
     await doc.ref.update({
       ownerId,
+      orgId: placement.orgId,
+      courseId: placement.courseId,
       name,
       nameKey: toNameKey(name),
       questionCount: questions.length,

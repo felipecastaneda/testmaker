@@ -1,9 +1,9 @@
 import "server-only";
 import { AuthError, requireUser, type AuthedUser } from "./auth";
+import { UserFacingError } from "./errors";
 import type { ActionResult } from "@/lib/types";
 
-/** Errors whose message is safe and useful to show the user. */
-export class UserFacingError extends Error {}
+export { UserFacingError };
 
 /**
  * Run a server action body for an authenticated, allow-listed user and convert

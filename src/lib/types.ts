@@ -59,3 +59,20 @@ export interface ActionResult<T = void> {
   code?: "unauthenticated" | "unverified" | "forbidden";
 }
 
+
+// ---------------------------------------------------------------------------
+// Organizations and courses
+// ---------------------------------------------------------------------------
+
+/** A solo professor's workspace is a "personal" org with a single owner. */
+export type OrgKind = "personal" | "institution";
+export type OrgRole = "owner" | "admin" | "instructor" | "assistant";
+export type CourseRole = "instructor" | "assistant";
+export type CourseAccessNeed = "view" | "edit" | "manage";
+
+export interface OrgSummary {
+  id: string;
+  name: string;
+  kind: OrgKind;
+  role: OrgRole;
+}

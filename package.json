@@ -13,7 +13,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-testmaker"
+    "emulators": "firebase emulators:start --only auth,firestore --project demo-testmaker",
+    "migrate:step1": "tsx --conditions=react-server scripts/migrate-step1.ts"
   },
   "dependencies": {
     "@genkit-ai/compat-oai": "^1.40.1",
