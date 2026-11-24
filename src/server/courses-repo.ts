@@ -6,16 +6,16 @@ import { UserFacingError } from "./errors";
 import { countTestsInCourse } from "./tests-repo";
 import {
   defaultCourseId,
+  getOrgDoc,
   getOrgRole,
-  listMemberships,
   listViewableCourses,
   personalOrgId,
   requireCourseAccess,
 } from "./workspace";
 import { canCreateCourses } from "@/lib/permissions";
+import { resolveSetting, type StoredSettings } from "@/lib/settings/resolve";
 import type { CourseInput, CourseSummary, CoursesOverview } from "@/lib/types";
 
-const ORGS = "orgs";
 const COURSES = "courses";
 
 /** The personal "My tests" course: tests are saved there by default, so it can't be removed. */
@@ -24,11 +24,25 @@ function isDefaultCourse(courseId: string, data: FirebaseFirestore.DocumentData 
   return typeof owner === "string" && courseId === defaultCourseId(owner) && data?.orgId === personalOrgId(owner);
 }
 
+function orgSettingsOf(org: FirebaseFirestore.DocumentSnapshot | undefined): StoredSettings | undefined {
+  return org?.get("settings") as StoredSettings | undefined;
+}
+
+function instructorsCanCreate(org: FirebaseFirestore.DocumentSnapshot | undefined): boolean {
+  return resolveSetting("courses.instructorsCanCreate", orgSettingsOf(org)).value;
+}
+
 function toSummary(
   id: string,
   data: FirebaseFirestore.DocumentData,
-  access: { edit: boolean; manage: boolean }
+  access: { edit: boolean; manage: boolean },
+  org: FirebaseFirestore.DocumentSnapshot | undefined
 ): CourseSummary {
+  const orgSettings = orgSettingsOf(org);
+  const courseSettings = data.settings as StoredSettings | undefined;
+  const instructions =
+    resolveSetting("generation.orgInstructions", orgSettings).value ||
+    resolveSetting("generation.courseInstructions", orgSettings, courseSettings).value;
   return {
     id,
     orgId: data.orgId,
@@ -39,6 +53,11 @@ function toSummary(
     isDefault: isDefaultCourse(id, data),
     canEdit: access.edit,
     canManage: access.manage,
+    generation: {
+      allowedModels: resolveSetting("generation.allowedModels", orgSettings).value,
+      defaultDifficulty: resolveSetting("generation.defaultDifficulty", orgSettings, courseSettings).value,
+      hasInstructions: !!instructions,
+    },
   };
 }
 
@@ -55,25 +74,20 @@ function optionalFields(input: Partial<CourseInput>, forCreate: boolean) {
 }
 
 export async function getCoursesOverview(user: AuthedUser): Promise<CoursesOverview> {
-  const db = adminDb();
-  const memberships = await listMemberships(user.uid);
-  const [courses, orgSnaps] = await Promise.all([
-    listViewableCourses(user.uid, memberships),
-    memberships.length ? db.getAll(...memberships.map((m) => db.collection(ORGS).doc(m.orgId))) : Promise.resolve([]),
-  ]);
+  const { memberships, orgs: orgDocs, courses } = await listViewableCourses(user.uid);
 
   const orgs = memberships
-    .map((m, i) => ({
+    .map((m) => ({
       id: m.orgId,
-      name: (orgSnaps[i]?.get("name") as string | undefined) ?? "Organization",
+      name: (orgDocs.get(m.orgId)?.get("name") as string | undefined) ?? "Organization",
       kind: m.orgKind,
       role: m.role,
-      canCreateCourses: canCreateCourses(m.role),
+      canCreateCourses: canCreateCourses(m.role, instructorsCanCreate(orgDocs.get(m.orgId))),
     }))
     .sort((a, b) => (a.kind === b.kind ? a.name.localeCompare(b.name) : a.kind === "personal" ? -1 : 1));
 
   const summaries = courses
-    .map((c) => toSummary(c.doc.id, c.doc.data()!, c.access))
+    .map((c) => toSummary(c.doc.id, c.doc.data()!, c.access, orgDocs.get(c.doc.get("orgId"))))
     .sort(
       (a, b) =>
         Number(a.archived) - Number(b.archived) ||
@@ -84,8 +98,10 @@ export async function getCoursesOverview(user: AuthedUser): Promise<CoursesOverv
 }
 
 export async function createCourse(user: AuthedUser, orgId: string, input: CourseInput): Promise<CourseSummary> {
-  const role = await getOrgRole(orgId, user.uid);
-  if (!canCreateCourses(role)) throw new UserFacingError("You can't create courses in this organization.");
+  const [role, org] = await Promise.all([getOrgRole(orgId, user.uid), getOrgDoc(orgId)]);
+  if (!canCreateCourses(role, instructorsCanCreate(org))) {
+    throw new UserFacingError("You can't create courses in this organization.");
+  }
   const now = new Date().toISOString();
   const ref = adminDb().collection(COURSES).doc();
   const data = {
@@ -100,7 +116,7 @@ export async function createCourse(user: AuthedUser, orgId: string, input: Cours
     updatedAt: now,
   };
   await ref.create(data);
-  return toSummary(ref.id, data, { edit: true, manage: true });
+  return toSummary(ref.id, data, { edit: true, manage: true }, org);
 }
 
 export async function updateCourse(

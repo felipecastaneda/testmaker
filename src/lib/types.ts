@@ -89,6 +89,12 @@ export interface CourseSummary {
   isDefault: boolean;
   canEdit: boolean;
   canManage: boolean;
+  /** Effective generation settings for this course. */
+  generation: {
+    allowedModels: string[];
+    defaultDifficulty: DifficultySetting;
+    hasInstructions: boolean;
+  };
 }
 
 export interface CoursesOverview {
@@ -100,4 +106,17 @@ export interface CourseInput {
   name: string;
   code?: string;
   term?: string;
+}
+
+export interface SettingsOverview {
+  profile: { email: string; selectedModels: string[] | null };
+  orgs: (OrgSummary & { canManage: boolean; settings: { values?: Record<string, unknown>; locked?: unknown } })[];
+  courses: {
+    id: string;
+    orgId: string;
+    name: string;
+    archived: boolean;
+    canManage: boolean;
+    settings: { values?: Record<string, unknown> };
+  }[];
 }

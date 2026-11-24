@@ -11,6 +11,7 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { useCourses } from "@/hooks/use-courses";
 import { extractTextFromFile, SUPPORTED_EXTENSIONS } from "@/lib/document-parser";
 import { MAX_DOCUMENT_CHARS } from "@/lib/generation";
+import { AVAILABLE_MODELS } from "@/ai/models";
 import type { DifficultySetting, QuestionType, SaveMode } from "@/lib/types";
 
 export interface GenerateRequest {
@@ -23,10 +24,14 @@ export interface GenerateRequest {
   recommendations: string;
   difficulty: DifficultySetting;
   questionTypes: QuestionType[];
+  /** Models to use: the user's choice, limited to what the course's organization allows. */
+  models: string[];
 }
 
 interface FileUploaderProps {
   onContentReady: (request: GenerateRequest) => void;
+  /** The user's model choice from the navbar. */
+  selectedModels: string[];
 }
 
 const MIN_CONTENT_LENGTH = 50;
@@ -64,7 +69,7 @@ const SAVE_MODES: { id: SaveMode; label: string; help: string; activeClass: stri
   },
 ];
 
-export function FileUploader({ onContentReady }: FileUploaderProps) {
+export function FileUploader({ onContentReady, selectedModels }: FileUploaderProps) {
   const [content, setContent] = useState("");
   const [testName, setTestName] = useState("");
   const [saveMode, setSaveMode] = useState<SaveMode>("new_version");
@@ -75,7 +80,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
   const [fileName, setFileName] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
-  const [difficulty, setDifficulty] = useState<DifficultySetting>("mixed");
+  const [pickedDifficulty, setDifficulty] = useState<DifficultySetting | null>(null);
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(["multiple_choice"]);
   const { callAction } = useAuth();
   const { overview } = useCourses();
@@ -84,6 +89,13 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
   const courseId = pickedCourseId ?? saveTargets[0]?.id;
   const orgName = (orgId: string) => overview?.orgs.find((o) => o.id === orgId)?.name;
   const multipleOrgs = new Set(saveTargets.map((c) => c.orgId)).size > 1;
+  const course = saveTargets.find((c) => c.id === courseId);
+  // Until the user picks one, use the course's default difficulty.
+  const difficulty = pickedDifficulty ?? course?.generation.defaultDifficulty ?? "mixed";
+  const allowedModels = course?.generation.allowedModels;
+  const models = allowedModels ? selectedModels.filter((m) => allowedModels.includes(m)) : selectedModels;
+  const modelLabel = (id: string) => AVAILABLE_MODELS.find((m) => m.id === id)?.label ?? id;
+  const skippedModels = selectedModels.filter((m) => !models.includes(m));
   const existingTestNames = Array.from(
     new Set(existingTests.filter((t) => !courseId || t.courseId === courseId).map((t) => t.name))
   );
@@ -153,7 +165,8 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
   const trimmedContent = content.trim();
   const missingTarget = targetsExistingTest && !testName;
   const tooLong = trimmedContent.length > MAX_DOCUMENT_CHARS;
-  const canGenerate = trimmedContent.length >= MIN_CONTENT_LENGTH && !tooLong && !missingTarget && !isParsing;
+  const canGenerate =
+    trimmedContent.length >= MIN_CONTENT_LENGTH && !tooLong && !missingTarget && !isParsing && models.length > 0;
 
   const submit = () => {
     if (!canGenerate) return;
@@ -166,6 +179,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
       recommendations: recommendations.trim(),
       difficulty,
       questionTypes,
+      models,
     });
   };
 
@@ -211,6 +225,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
               value={courseId}
               onChange={(e) => {
                 setPickedCourseId(e.target.value);
+                setDifficulty(null);
                 if (targetsExistingTest) setTestName("");
               }}
             >
@@ -351,7 +366,26 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
             onChange={(e) => setRecommendations(e.target.value)}
             maxLength={2000}
           />
+          {course?.generation.hasInstructions && (
+            <p className="text-xs text-indigo-700" data-testid="instructions-note">
+              Your organization&apos;s and course&apos;s AI instructions are added automatically.
+            </p>
+          )}
         </div>
+
+        {skippedModels.length > 0 && (
+          <Alert variant="default" className="bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800">
+              {models.length === 0 ? "None of your selected AI models are enabled here" : "Some AI models will be skipped"}
+            </AlertTitle>
+            <AlertDescription className="text-amber-700">
+              {skippedModels.map(modelLabel).join(" and ")} {skippedModels.length === 1 ? "isn't" : "aren't"} enabled for this
+              course&apos;s organization.
+              {models.length === 0 && " Select another model in the top bar."}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid gap-6 md:grid-cols-2">
           <Card className="p-6 border-dashed border-2 flex flex-col items-center justify-center text-center space-y-4 hover:border-primary/50 transition-colors bg-white">

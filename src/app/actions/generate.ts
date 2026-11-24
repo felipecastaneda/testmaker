@@ -10,7 +10,8 @@ import { UserFacingError, withUser } from '@/server/action-result';
 import { serverConfig } from '@/server/config';
 import { fakeGenerate } from '@/server/fake-ai';
 import { getDailyUsage, releaseDailyQuota, reserveDailyQuota } from '@/server/tests-repo';
-import { ensureUserWorkspace } from '@/server/workspace';
+import { getGenerationSettings, getSelectedModelsPref } from '@/server/settings-repo';
+import { ensureUserWorkspace, requireCourseAccess } from '@/server/workspace';
 
 const modelIds = AVAILABLE_MODELS.map((m) => m.id) as [string, ...string[]];
 
@@ -21,6 +22,8 @@ const BatchSchema = z.object({
   difficulty: z.enum(['easy', 'medium', 'hard', 'mixed']),
   questionTypes: z.array(z.enum(['multiple_choice', 'true_false'])).min(1).max(2),
   instructions: z.string().max(2_000).optional().default(''),
+  /** The course the test is for; its settings apply. Defaults to the user's "My tests". */
+  courseId: z.string().min(1).max(200).optional(),
 });
 export type GenerateBatchInput = z.input<typeof BatchSchema>;
 
@@ -28,6 +31,8 @@ export interface AccountStatus {
   email: string;
   dailyLimit: number;
   usedToday: number;
+  /** The user's preferred models, or null if never chosen. */
+  selectedModels: string[] | null;
 }
 
 /**
@@ -36,8 +41,12 @@ export interface AccountStatus {
  */
 export async function getAccountStatus(idToken: string): Promise<ActionResult<AccountStatus>> {
   return withUser(idToken, async (user) => {
-    const [usedToday] = await Promise.all([getDailyUsage(user.uid), ensureUserWorkspace(user)]);
-    return { email: user.email, dailyLimit: serverConfig.dailyQuestionLimit, usedToday };
+    const [usedToday, , selectedModels] = await Promise.all([
+      getDailyUsage(user.uid),
+      ensureUserWorkspace(user),
+      getSelectedModelsPref(user.uid),
+    ]);
+    return { email: user.email, dailyLimit: serverConfig.dailyQuestionLimit, usedToday, selectedModels };
   });
 }
 
@@ -56,12 +65,21 @@ export async function generateQuestionBatch(
     }
     const req = parsed.data;
 
+    const courseId = req.courseId ?? (await ensureUserWorkspace(user)).defaultCourseId;
+    const { orgId } = await requireCourseAccess(user, courseId, 'edit');
+    const settings = await getGenerationSettings(orgId, courseId);
+    if (!settings.allowedModels.includes(req.model)) {
+      throw new UserFacingError(`${getModelOption(req.model)?.label ?? req.model} isn't enabled for this organization.`);
+    }
+    // Organization and course instructions come first; the author's own request last.
+    const instructions = [...settings.instructions, req.instructions].filter(Boolean).join('\n\n');
+
     await reserveDailyQuota(user.uid, req.count, serverConfig.dailyQuestionLimit);
 
     let raw: RawGeneratedQuestion[];
     try {
       if (serverConfig.fakeAi) {
-        raw = fakeGenerate(req.chunk, req.count, req.questionTypes, req.model);
+        raw = fakeGenerate(req.chunk, req.count, req.questionTypes, req.model, instructions);
       } else {
         // Imported lazily so Genkit and the provider SDKs only load when actually needed.
         const { generateQuestionSetFlow } = await import('@/ai/flows/generate-question-set');
@@ -72,7 +90,7 @@ export async function generateQuestionBatch(
           difficulty: req.difficulty,
           allowMultipleChoice: req.questionTypes.includes('multiple_choice'),
           allowTrueFalse: req.questionTypes.includes('true_false'),
-          specialInstructions: req.instructions || undefined,
+          specialInstructions: instructions || undefined,
         });
         raw = output.questions;
       }
