@@ -98,6 +98,10 @@ production data or spends API credits. First run: `npx playwright install chromi
   - *New Version*: creates the test, or archives the current questions and bumps the version.
   - *Append*: adds questions to an existing test.
   - *Re-create*: replaces a test and clears its history.
+- **Courses**: the library groups tests by course. Create, rename, archive and delete
+  courses (a course must be empty to delete it; the personal "My tests" course can't be
+  removed), choose the course when generating, and move tests between courses with their
+  history.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.

@@ -65,7 +65,7 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
-  const [pendingSave, setPendingSave] = useState<{ name: string; questions: QuestionData[]; mode: SaveMode } | null>(null);
+  const [pendingSave, setPendingSave] = useState<{ name: string; questions: QuestionData[]; mode: SaveMode; courseId?: string } | null>(null);
   const cancelRef = useRef(false);
 
   const heroImage = PlaceHolderImages.find((img) => img.id === "hero-illustration");
@@ -88,8 +88,8 @@ export default function Home() {
     }
   };
 
-  const persist = async (name: string, questions: QuestionData[], mode: SaveMode) => {
-    const result = await callAction((token) => saveTest(token, name, questions, mode));
+  const persist = async (name: string, questions: QuestionData[], mode: SaveMode, courseId?: string) => {
+    const result = await callAction((token) => saveTest(token, name, questions, mode, courseId));
     if (!result.success || !result.data) {
       toast({
         title: "Couldn't save test",
@@ -112,7 +112,7 @@ export default function Home() {
   };
 
   const handleGenerate = async (request: GenerateRequest) => {
-    const { testName: name, saveMode, questionCount } = request;
+    const { testName: name, saveMode, questionCount, courseId } = request;
     cancelRef.current = false;
     setTestName(name);
     setTestId(null);
@@ -194,10 +194,10 @@ export default function Home() {
     showReview(questions, name, null);
 
     if (saveMode === "append" || saveMode === "recreate") {
-      setPendingSave({ name, questions, mode: saveMode });
+      setPendingSave({ name, questions, mode: saveMode, courseId });
       setShowConfirmDialog(true);
     } else {
-      await persist(name, questions, saveMode);
+      await persist(name, questions, saveMode, courseId);
     }
   };
 
@@ -208,7 +208,7 @@ export default function Home() {
   const confirmSave = async () => {
     if (!pendingSave) return;
     setIsSaving(true);
-    await persist(pendingSave.name, pendingSave.questions, pendingSave.mode);
+    await persist(pendingSave.name, pendingSave.questions, pendingSave.mode, pendingSave.courseId);
     setIsSaving(false);
     setShowConfirmDialog(false);
     setPendingSave(null);

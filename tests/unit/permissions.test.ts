@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { courseAccess, isOrgAdmin } from "@/lib/permissions";
+import { canCreateCourses, courseAccess, isOrgAdmin } from "@/lib/permissions";
 import type { CourseRole, OrgRole } from "@/lib/types";
 
 const all = { view: true, edit: true, manage: true };
@@ -38,5 +38,16 @@ describe("isOrgAdmin", () => {
       false,
       false,
     ]);
+  });
+});
+
+describe("canCreateCourses", () => {
+  it("lets admins always, instructors when allowed, never assistants or non-members", () => {
+    expect(canCreateCourses("owner", false)).toBe(true);
+    expect(canCreateCourses("admin", false)).toBe(true);
+    expect(canCreateCourses("instructor")).toBe(true);
+    expect(canCreateCourses("instructor", false)).toBe(false);
+    expect(canCreateCourses("assistant")).toBe(false);
+    expect(canCreateCourses(null)).toBe(false);
   });
 });

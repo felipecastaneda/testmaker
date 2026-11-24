@@ -8,12 +8,15 @@ import { Card } from "@/components/ui/card";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { listTests } from "@/app/actions/tests";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useCourses } from "@/hooks/use-courses";
 import { extractTextFromFile, SUPPORTED_EXTENSIONS } from "@/lib/document-parser";
 import { MAX_DOCUMENT_CHARS } from "@/lib/generation";
 import type { DifficultySetting, QuestionType, SaveMode } from "@/lib/types";
 
 export interface GenerateRequest {
   content: string;
+  /** Course to save into; undefined means the user's default course. */
+  courseId?: string;
   testName: string;
   saveMode: SaveMode;
   questionCount: number;
@@ -67,19 +70,29 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
   const [saveMode, setSaveMode] = useState<SaveMode>("new_version");
   const [questionCount, setQuestionCount] = useState(5);
   const [recommendations, setRecommendations] = useState("");
-  const [existingTestNames, setExistingTestNames] = useState<string[]>([]);
+  const [existingTests, setExistingTests] = useState<{ name: string; courseId: string }[]>([]);
+  const [pickedCourseId, setPickedCourseId] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [isParsing, setIsParsing] = useState(false);
   const [parseError, setParseError] = useState<string | null>(null);
   const [difficulty, setDifficulty] = useState<DifficultySetting>("mixed");
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(["multiple_choice"]);
   const { callAction } = useAuth();
+  const { overview } = useCourses();
+  // Courses the user can save into; the default course sorts first.
+  const saveTargets = overview?.courses.filter((c) => c.canEdit && !c.archived) ?? [];
+  const courseId = pickedCourseId ?? saveTargets[0]?.id;
+  const orgName = (orgId: string) => overview?.orgs.find((o) => o.id === orgId)?.name;
+  const multipleOrgs = new Set(saveTargets.map((c) => c.orgId)).size > 1;
+  const existingTestNames = Array.from(
+    new Set(existingTests.filter((t) => !courseId || t.courseId === courseId).map((t) => t.name))
+  );
 
   useEffect(() => {
     let cancelled = false;
     callAction(listTests).then((result) => {
       if (cancelled || !result.success) return;
-      setExistingTestNames(Array.from(new Set(result.data?.map((t) => t.name) ?? [])));
+      setExistingTests(result.data?.map((t) => ({ name: t.name, courseId: t.courseId })) ?? []);
     });
     return () => {
       cancelled = true;
@@ -146,6 +159,7 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
     if (!canGenerate) return;
     onContentReady({
       content: trimmedContent,
+      courseId,
       testName: testName.trim() || "Untitled Test",
       saveMode,
       questionCount,
@@ -185,6 +199,31 @@ export function FileUploader({ onContentReady }: FileUploaderProps) {
           </div>
           <p className="text-xs text-slate-500 italic">{activeMode.help}</p>
         </div>
+
+        {saveTargets.length > 1 && (
+          <div className="space-y-2">
+            <label htmlFor="course" className="text-sm font-medium">
+              Course
+            </label>
+            <select
+              id="course"
+              className="w-full p-3 rounded-lg border border-slate-200 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all bg-white"
+              value={courseId}
+              onChange={(e) => {
+                setPickedCourseId(e.target.value);
+                if (targetsExistingTest) setTestName("");
+              }}
+            >
+              {saveTargets.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name}
+                  {c.code ? ` · ${c.code}` : ""}
+                  {multipleOrgs ? ` (${orgName(c.orgId)})` : ""}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6">
           <div className="space-y-2">

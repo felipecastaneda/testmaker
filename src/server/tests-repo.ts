@@ -124,6 +124,7 @@ export async function listTests(courseIds: string[]): Promise<TestSummary[]> {
       const data = d.data();
       return {
         id: d.id,
+        courseId: data.courseId,
         name: data.name || d.id,
         version: data.version || 1,
         createdAt: data.generatedAt || data.updatedAt,
@@ -197,7 +198,8 @@ export async function saveTest(
   const db = adminDb();
   const name = rawName.trim();
   if (!/[a-z0-9]/i.test(name)) throw new UserFacingError("Please give the test a name containing letters or numbers.");
-  const { orgId } = await requireCourseAccess(user, courseId, "edit");
+  const { orgId, archived } = await requireCourseAccess(user, courseId, "edit");
+  if (archived) throw new UserFacingError("That course is archived. Restore it before adding tests.");
   const now = new Date().toISOString();
   const existing = await findByName(courseId, name);
 
@@ -286,6 +288,24 @@ export async function restoreVersion(user: AuthedUser, testId: string, version: 
   if (!(await versionRef.get()).exists) throw new UserFacingError(`Version ${version} wasn't found.`);
   const questions = await readQuestions(versionRef);
   return replaceWithNewVersion(ref, questions, new Date().toISOString());
+}
+
+/** Move a test (with its questions and history) to another course the user can edit. */
+export async function moveTest(user: AuthedUser, testId: string, targetCourseId: string): Promise<void> {
+  const ref = await getTestRef(user, testId, "edit");
+  const target = await requireCourseAccess(user, targetCourseId, "edit");
+  if (target.archived) throw new UserFacingError("That course is archived. Restore it before moving tests into it.");
+  const snap = await ref.get();
+  if (snap.get("courseId") === targetCourseId) return;
+  const clash = await findByName(targetCourseId, snap.get("name"));
+  if (clash) throw new UserFacingError(`That course already has a test called "${snap.get("name")}". Rename one of them first.`);
+  await ref.update({ courseId: targetCourseId, orgId: target.orgId, updatedAt: new Date().toISOString() });
+}
+
+/** Number of tests in a course. */
+export async function countTestsInCourse(courseId: string): Promise<number> {
+  const agg = await adminDb().collection(TESTS).where("courseId", "==", courseId).count().get();
+  return agg.data().count;
 }
 
 export async function deleteTest(user: AuthedUser, testId: string): Promise<void> {
