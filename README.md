@@ -39,8 +39,15 @@ Credentials: run `gcloud auth application-default login` once.
 ## Access control
 
 - Users sign in with email and password and must **verify their email**.
-- Only emails listed in `ALLOWED_EMAILS` can use the app; everyone else sees "No access".
-- Every server action verifies the Firebase ID token, the allow-list and test ownership.
+- A verified user gets in if **any** of these is true; everyone else sees "No access":
+  - their email is in `ALLOWED_EMAILS`
+  - their email is in `_meta/platform.allowedEmails` in Firestore, or `_meta/platform.signupMode` is `"open"`
+  - they are a member of an *institution* organization (i.e. someone invited them)
+- On first sign-in every user gets a **personal organization** with one course, "My tests".
+  Tests belong to a course, and access to a test is decided by the course: organization
+  owners and admins see every course in their organization; instructors and assistants see
+  the courses they are staff on. Rules live in `src/lib/permissions.ts`.
+- Every server action verifies the Firebase ID token, the signup gate and course access.
 - Each user can generate at most `DAILY_QUESTION_LIMIT` questions per day (UTC). Failed
   generations are refunded.
 - Firestore and Storage security rules deny all browser access; only the server reads data.
@@ -67,6 +74,7 @@ Changing a secret takes effect on the next rollout (push to `main`, or
 | `npm run emulators` | Start the Auth and Firestore emulators |
 | `npm run genkit:dev` | Genkit developer UI for the AI flow |
 | `npx tsx test-models.ts` | Smoke-test each configured model with real API keys |
+| `npm run migrate:step1` | Organizations migration (dry run; add `-- --apply`) |
 
 The end-to-end suite runs against a `demo-testmaker` emulator project with a deterministic
 fake LLM (`TESTMAKER_FAKE_AI=1`, ignored when `NODE_ENV=production`), so it never touches
@@ -104,14 +112,34 @@ production data or spends API credits. First run: `npx playwright install chromi
 ### Data model
 
 ```
-tests/{testId}                               ownerId, name, nameKey, version, questionCount, …
+users/{uid}                                  email, personalOrgId, defaultCourseId, …
+orgs/{orgId}                                 name, kind ("personal" | "institution"), settings
+orgs/{orgId}/members/{uid}                   uid, email, orgKind, role (owner | admin | instructor | assistant)
+courses/{courseId}                           orgId, name, staff {uid: role}, staffUids, settings
+tests/{testId}                               ownerId, orgId, courseId, name, nameKey, version, questionCount, …
 tests/{testId}/questions/{questionId}        question fields + position
 tests/{testId}/versions/v{n}                 archived version metadata
 tests/{testId}/versions/v{n}/questions/{id}  archived questions
 usage/{uid}_{yyyy-mm-dd}                     daily question count
+_meta/platform                               signupMode, allowedEmails
 ```
 
 Questions live in subcollections, so tests aren't limited by Firestore's 1 MB document size,
 and editing one question never overwrites another.
 
-Deploy rule changes with `firebase deploy --only firestore:rules,storage`.
+Deploy rule and index changes with `firebase deploy --only firestore:rules,firestore:indexes,storage`.
+
+### Migrating to organizations (step 1)
+
+Existing data needs personal organizations and courses. The app creates them lazily on each
+user's next sign-in, but you can migrate everyone at once. Run this **before** deploying,
+after deploying the indexes:
+
+```bash
+gcloud firestore export gs://<bucket>/backups/pre-step1   # backup
+npm run migrate:step1                                      # dry run: shows what would change
+npm run migrate:step1 -- --apply
+```
+
+The script only adds documents and fields, and running it again does nothing new.
+See [docs/plans/step-1-foundation.md](docs/plans/step-1-foundation.md) for the full plan.

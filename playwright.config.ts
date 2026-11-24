@@ -14,6 +14,10 @@ export const E2E = {
   firestoreHost: "127.0.0.1:8080",
   teacher: "teacher@example.com",
   outsider: "outsider@example.com",
+  /** Also allow-listed; must never see the teacher's tests. */
+  colleague: "colleague@example.com",
+  /** Not allow-listed; gets in by being a member of an institution. */
+  invitee: "invitee@example.com",
   password: "correct-horse-battery",
 };
 
@@ -44,7 +48,7 @@ export default defineConfig({
       FIREBASE_AUTH_EMULATOR_HOST: E2E.authHost,
       FIRESTORE_EMULATOR_HOST: E2E.firestoreHost,
       TESTMAKER_FAKE_AI: "1",
-      ALLOWED_EMAILS: E2E.teacher,
+      ALLOWED_EMAILS: `${E2E.teacher},${E2E.colleague}`,
       LEGACY_OWNER_EMAIL: E2E.teacher,
       DAILY_QUESTION_LIMIT: "100",
     },

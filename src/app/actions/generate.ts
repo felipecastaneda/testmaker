@@ -10,6 +10,7 @@ import { UserFacingError, withUser } from '@/server/action-result';
 import { serverConfig } from '@/server/config';
 import { fakeGenerate } from '@/server/fake-ai';
 import { getDailyUsage, releaseDailyQuota, reserveDailyQuota } from '@/server/tests-repo';
+import { ensureUserWorkspace } from '@/server/workspace';
 
 const modelIds = AVAILABLE_MODELS.map((m) => m.id) as [string, ...string[]];
 
@@ -29,13 +30,15 @@ export interface AccountStatus {
   usedToday: number;
 }
 
-/** Confirms the signed-in user may use the app, and reports their quota. */
+/**
+ * Confirms the signed-in user may use the app, sets up their personal workspace on
+ * first sign-in, and reports their quota.
+ */
 export async function getAccountStatus(idToken: string): Promise<ActionResult<AccountStatus>> {
-  return withUser(idToken, async (user) => ({
-    email: user.email,
-    dailyLimit: serverConfig.dailyQuestionLimit,
-    usedToday: await getDailyUsage(user.uid),
-  }));
+  return withUser(idToken, async (user) => {
+    const [usedToday] = await Promise.all([getDailyUsage(user.uid), ensureUserWorkspace(user)]);
+    return { email: user.email, dailyLimit: serverConfig.dailyQuestionLimit, usedToday };
+  });
 }
 
 /**
