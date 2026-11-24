@@ -31,3 +31,8 @@ export function courseAccess({ orgRole, courseRole, assistantsCanEdit }: CourseA
 export function canAccessCourse(input: CourseAccessInput, need: CourseAccessNeed): boolean {
   return courseAccess(input)[need];
 }
+
+/** Org setting `courses.instructorsCanCreate` defaults to true until settings ship. */
+export function canCreateCourses(role: OrgRole | null | undefined, instructorsCanCreate = true): boolean {
+  return isOrgAdmin(role) || (role === "instructor" && instructorsCanCreate);
+}

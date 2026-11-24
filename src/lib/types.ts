@@ -22,6 +22,7 @@ export type SaveMode = "new_version" | "append" | "recreate";
 
 export interface TestSummary {
   id: string;
+  courseId: string;
   name: string;
   version: number;
   createdAt: string;
@@ -75,4 +76,28 @@ export interface OrgSummary {
   name: string;
   kind: OrgKind;
   role: OrgRole;
+}
+
+export interface CourseSummary {
+  id: string;
+  orgId: string;
+  name: string;
+  code?: string;
+  term?: string;
+  archived: boolean;
+  /** The personal "My tests" course, which can't be deleted. */
+  isDefault: boolean;
+  canEdit: boolean;
+  canManage: boolean;
+}
+
+export interface CoursesOverview {
+  orgs: (OrgSummary & { canCreateCourses: boolean })[];
+  courses: CourseSummary[];
+}
+
+export interface CourseInput {
+  name: string;
+  code?: string;
+  term?: string;
 }

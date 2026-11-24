@@ -34,8 +34,9 @@ async function signIn(page: Page, email: string) {
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
 }
 
-async function generate(page: Page, name: string, count: number) {
+async function generate(page: Page, name: string, count: number, course?: string) {
   await page.getByRole("button", { name: "Create New Test" }).click();
+  if (course) await page.getByLabel("Course", { exact: true }).selectOption({ label: course });
   await page.getByLabel("Test Name").fill(name);
   await page.getByLabel("Number of questions").fill(String(count));
   await page.getByLabel("Or Paste Content Directly").fill(STUDY_TEXT);
@@ -143,6 +144,57 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("button", { name: "Delete Legacy Study Guide" }).click();
     await expect(page.getByText("Test Deleted", { exact: true })).toBeVisible();
     await expect(page.getByRole("heading", { name: "Legacy Study Guide" })).toHaveCount(0);
+  });
+
+  test("courses: create, save into, move, archive and delete", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByRole("button", { name: "New course" }).click();
+    await page.getByLabel("Course name").fill("Biology 101");
+    await page.getByLabel("Code (optional)").fill("BIO-101");
+    await page.getByRole("button", { name: "Create course" }).click();
+    await expect(page.getByText("Course created", { exact: true })).toBeVisible();
+    const biology = page.getByRole("region", { name: "Biology 101" });
+    const myTests = page.getByRole("region", { name: "My tests" });
+    await expect(biology.getByText("No tests in this course yet.")).toBeVisible();
+
+    // Generate straight into the new course.
+    await generate(page, "Genetics Quiz", 2, "Biology 101 · BIO-101");
+    await page.getByRole("button", { name: "Back to start" }).click();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await expect(biology.getByText("Genetics Quiz")).toBeVisible();
+    await expect(myTests.getByText("Genetics Quiz")).toHaveCount(0);
+
+    // A course with tests can't be deleted.
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete course Biology 101" }).click();
+    await expect(page.getByText("Move or delete them first.", { exact: false })).toBeVisible();
+
+    // Move the test to "My tests".
+    await page.getByRole("button", { name: "Move Genetics Quiz" }).click();
+    await page.getByRole("dialog").getByLabel("Course").selectOption({ label: "My tests" });
+    await page.getByRole("dialog").getByRole("button", { name: "Move", exact: true }).click();
+    await expect(page.getByText("Test moved", { exact: true })).toBeVisible();
+    await expect(myTests.getByText("Genetics Quiz")).toBeVisible();
+    await page.reload();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await expect(myTests.getByText("Genetics Quiz")).toBeVisible();
+    await expect(biology.getByText("No tests in this course yet.")).toBeVisible();
+
+    // Archive hides the course; it can be shown and restored.
+    await page.getByRole("button", { name: "Archive course Biology 101" }).click();
+    await expect(page.getByText("Course archived", { exact: true })).toBeVisible();
+    await expect(biology).toHaveCount(0);
+    await page.getByLabel("Show archived").check();
+    await page.getByRole("button", { name: "Restore course Biology 101" }).click();
+    await expect(page.getByText("Course restored", { exact: true })).toBeVisible();
+
+    // The default course can't be removed, so it offers no delete button.
+    await expect(page.getByRole("button", { name: "Delete course My tests" })).toHaveCount(0);
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete course Biology 101" }).click();
+    await expect(page.getByText("Course deleted", { exact: true })).toBeVisible();
+    await expect(biology).toHaveCount(0);
   });
 
   test("another allow-listed user gets a separate workspace", async ({ page }) => {

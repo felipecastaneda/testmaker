@@ -2,8 +2,9 @@ import "server-only";
 import { adminDb } from "./admin";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
-import { canAccessCourse, isOrgAdmin } from "@/lib/permissions";
+import { canAccessCourse, courseAccess, isOrgAdmin } from "@/lib/permissions";
 import type { CourseAccessNeed, CourseRole, OrgKind, OrgRole } from "@/lib/types";
+import type { DocumentSnapshot } from "firebase-admin/firestore";
 
 /*
  * Data model
@@ -141,7 +142,7 @@ export async function getOrgRole(orgId: string, uid: string): Promise<OrgRole | 
 // Courses
 // ---------------------------------------------------------------------------
 
-function courseRoleOf(data: FirebaseFirestore.DocumentData | undefined, uid: string): CourseRole | null {
+export function courseRoleOf(data: FirebaseFirestore.DocumentData | undefined, uid: string): CourseRole | null {
   const role = data?.staff?.[uid];
   return role === "instructor" || role === "assistant" ? role : null;
 }
@@ -155,7 +156,7 @@ export async function requireCourseAccess(
   courseId: unknown,
   need: CourseAccessNeed,
   notFound = "Course not found."
-): Promise<{ courseId: string; orgId: string }> {
+): Promise<{ courseId: string; orgId: string; archived: boolean }> {
   if (typeof courseId !== "string" || !courseId || courseId.includes("/")) throw new UserFacingError(notFound);
   const snap = await adminDb().collection(COURSES).doc(courseId).get();
   if (!snap.exists) throw new UserFacingError(notFound);
@@ -170,29 +171,39 @@ export async function requireCourseAccess(
     need
   );
   if (!allowed) throw new UserFacingError(notFound);
-  return { courseId, orgId };
+  return { courseId, orgId, archived: snap.get("archived") === true };
 }
 
-/** Ids of every course the user can view, across all their orgs. */
-export async function listViewableCourseIds(uid: string): Promise<string[]> {
+export interface ViewableCourse {
+  doc: DocumentSnapshot;
+  orgRole: OrgRole;
+  courseRole: CourseRole | null;
+  access: Record<CourseAccessNeed, boolean>;
+}
+
+/** Every course the user can view, across all their orgs, with what they may do in it. */
+export async function listViewableCourses(uid: string, memberships?: Membership[]): Promise<ViewableCourse[]> {
   const db = adminDb();
-  const memberships = await listMemberships(uid);
+  memberships ??= await listMemberships(uid);
   const roleByOrg = new Map(memberships.map((m) => [m.orgId, m.role]));
 
   const adminOrgs = memberships.filter((m) => isOrgAdmin(m.role)).map((m) => m.orgId);
   const [adminCourses, staffCourses] = await Promise.all([
-    Promise.all(adminOrgs.map((orgId) => db.collection(COURSES).where("orgId", "==", orgId).select("orgId", "staff").get())),
-    db.collection(COURSES).where("staffUids", "array-contains", uid).select("orgId", "staff").get(),
+    Promise.all(adminOrgs.map((orgId) => db.collection(COURSES).where("orgId", "==", orgId).get())),
+    db.collection(COURSES).where("staffUids", "array-contains", uid).get(),
   ]);
 
-  const ids = new Set<string>();
+  const byId = new Map<string, ViewableCourse>();
   for (const doc of [...adminCourses.flatMap((s) => s.docs), ...staffCourses.docs]) {
-    const input = {
-      orgRole: roleByOrg.get(doc.get("orgId")) ?? null,
-      courseRole: courseRoleOf(doc.data(), uid),
-      assistantsCanEdit: false,
-    };
-    if (canAccessCourse(input, "view")) ids.add(doc.id);
+    const orgRole = roleByOrg.get(doc.get("orgId")) ?? null;
+    const courseRole = courseRoleOf(doc.data(), uid);
+    const access = courseAccess({ orgRole, courseRole, assistantsCanEdit: false });
+    if (orgRole && access.view) byId.set(doc.id, { doc, orgRole, courseRole, access });
   }
-  return [...ids];
+  return [...byId.values()];
+}
+
+/** Ids of every course the user can view, across all their orgs. */
+export async function listViewableCourseIds(uid: string): Promise<string[]> {
+  return (await listViewableCourses(uid)).map((c) => c.doc.id);
 }
