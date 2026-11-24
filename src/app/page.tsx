@@ -1,14 +1,15 @@
 "use client";
 
-import React, { useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import Image from "next/image";
 import { Navbar } from "@/components/TestMaker/Navbar";
 import { FileUploader, type GenerateRequest } from "@/components/TestMaker/FileUploader";
 import { TestPreview } from "@/components/TestMaker/TestPreview";
 import { TestLibrary } from "@/components/TestMaker/TestLibrary";
 import { useAuth } from "@/components/auth/AuthProvider";
-import { AccessProblemCard, FullCardSpinner, SignInCard, VerifyEmailCard } from "@/components/auth/AuthScreens";
+import { useAccessGate } from "@/components/auth/AccessGate";
 import { generateQuestionBatch } from "@/app/actions/generate";
+import { updatePrefs } from "@/app/actions/settings";
 import { loadTest, saveTest } from "@/app/actions/tests";
 import { Loader2, Sparkles, Rocket, CheckCircle2, Plus, Library, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,6 +63,19 @@ export default function Home() {
   const [testVersion, setTestVersion] = useState<number | undefined>(undefined);
   const [reviewKey, setReviewKey] = useState(0);
   const [selectedModels, setSelectedModels] = useState<string[]>(AVAILABLE_MODELS.map((m) => m.id));
+  const savedModels = auth.access.status === "allowed" ? auth.access.account.selectedModels : null;
+
+  // Start from the user's saved model choice once their account loads.
+  useEffect(() => {
+    const valid = savedModels?.filter((id) => AVAILABLE_MODELS.some((m) => m.id === id));
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    if (valid?.length) setSelectedModels(valid);
+  }, [savedModels]);
+
+  const changeModels = (models: string[]) => {
+    setSelectedModels(models);
+    void callAction((token) => updatePrefs(token, { selectedModels: models }));
+  };
   const [activeTab, setActiveTab] = useState<"new" | "library">("new");
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -112,7 +126,7 @@ export default function Home() {
   };
 
   const handleGenerate = async (request: GenerateRequest) => {
-    const { testName: name, saveMode, questionCount, courseId } = request;
+    const { testName: name, saveMode, questionCount, courseId, models } = request;
     cancelRef.current = false;
     setTestName(name);
     setTestId(null);
@@ -121,7 +135,7 @@ export default function Home() {
     setLoadingStatus("Planning your test...");
 
     const chunks = chunkDocument(request.content);
-    const batches = planBatches(chunks, selectedModels, questionCount);
+    const batches = planBatches(chunks, models, questionCount);
     let produced = 0;
     let requested = 0;
     const errors = new Set<string>();
@@ -142,6 +156,7 @@ export default function Home() {
           difficulty: request.difficulty,
           questionTypes: request.questionTypes,
           instructions: request.recommendations,
+          courseId,
         })
       );
       requested += batch.count;
@@ -236,20 +251,13 @@ export default function Home() {
     setActiveTab("new");
   };
 
-  const ready = !!auth.user?.emailVerified && auth.access.status === "allowed";
-  let gate: React.ReactNode = null;
-  if (auth.loading) gate = <FullCardSpinner />;
-  else if (!auth.user) gate = <SignInCard />;
-  else if (!auth.user.emailVerified) gate = <VerifyEmailCard />;
-  else if (auth.access.status === "unknown") gate = <FullCardSpinner />;
-  else if (auth.access.status === "forbidden") gate = <AccessProblemCard message={auth.access.message} />;
-  else if (auth.access.status === "error") gate = <AccessProblemCard message={auth.access.message} retry={auth.refreshAccount} />;
+  const { ready, gate } = useAccessGate();
 
   const currentStep: AppStep = ready ? step : "input";
 
   return (
     <div className="flex flex-col min-h-screen selection:bg-accent/30">
-      <Navbar selectedModels={selectedModels} onModelsChange={setSelectedModels} onHome={reset} />
+      <Navbar selectedModels={selectedModels} onModelsChange={changeModels} onHome={reset} />
 
       <main className="flex-1">
         {currentStep === "input" && (
@@ -333,7 +341,7 @@ export default function Home() {
                 <div className="bg-white rounded-2xl shadow-2xl p-6 md:p-10 animate-in fade-in slide-in-from-bottom-4 duration-500 border border-slate-100 relative z-20">
                   {gate ??
                     (activeTab === "new" ? (
-                      <FileUploader onContentReady={handleGenerate} />
+                      <FileUploader onContentReady={handleGenerate} selectedModels={selectedModels} />
                     ) : (
                       <TestLibrary onSelectTest={handleLoadExisting} />
                     ))}

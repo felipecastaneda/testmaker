@@ -7,7 +7,15 @@ import type { QuestionType } from "@/lib/types";
  * (TESTMAKER_FAKE_AI=1, never honoured in production). Builds questions from the
  * sentences of the chunk so the output is still tied to the document.
  */
-export function fakeGenerate(chunk: string, count: number, types: QuestionType[], model: string): RawGeneratedQuestion[] {
+export function fakeGenerate(
+  chunk: string,
+  count: number,
+  types: QuestionType[],
+  model: string,
+  instructions?: string
+): RawGeneratedQuestion[] {
+  // Echo instructions so tests can see what reached the prompt.
+  const note = instructions ? ` [Instructions: ${instructions.replace(/\s+/g, " ")}]` : "";
   const sentences = chunk
     .split(/(?<=[.!?])\s+/)
     .map((s) => s.trim())
@@ -25,7 +33,7 @@ export function fakeGenerate(chunk: string, count: number, types: QuestionType[]
         question: `True or false (#${i + 1}): ${sentence}`,
         correctAnswer: "True",
         distractors: [],
-        explanation: "The statement is taken directly from the material.",
+        explanation: `The statement is taken directly from the material.${note}`,
         sourceQuote: sentence,
         difficulty: "easy",
       });
@@ -35,7 +43,7 @@ export function fakeGenerate(chunk: string, count: number, types: QuestionType[]
         question: `Fake question #${i + 1} about: ${sentence.slice(0, 60)}`,
         correctAnswer: `Correct answer ${i + 1}`,
         distractors: [`Wrong answer ${i + 1}a`, `Wrong answer ${i + 1}b`, `Wrong answer ${i + 1}c`],
-        explanation: "Because the material says so.",
+        explanation: `Because the material says so.${note}`,
         sourceQuote: sentence,
         difficulty: "medium",
       });

@@ -1,13 +1,16 @@
 "use client";
 
-import { GraduationCap, Zap, Cpu, Check, LogOut, type LucideIcon } from "lucide-react";
+import Link from "next/link";
+import { GraduationCap, Zap, Cpu, Check, LogOut, Settings, type LucideIcon } from "lucide-react";
 import { AVAILABLE_MODELS } from "@/ai/models";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 
 interface NavbarProps {
-  selectedModels: string[];
-  onModelsChange: (models: string[]) => void;
+  /** Omit both to hide the model picker. */
+  selectedModels?: string[];
+  onModelsChange?: (models: string[]) => void;
+  /** Omit to link the logo to the home page. */
   onHome?: () => void;
 }
 
@@ -17,11 +20,12 @@ const MODEL_STYLES: Record<string, { icon: LucideIcon; checked: string; iconColo
 };
 const FALLBACK_STYLE = { icon: Cpu, checked: "bg-primary border-primary", iconColor: "text-primary" };
 
-export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) {
+export function Navbar({ selectedModels = [], onModelsChange, onHome }: NavbarProps) {
   const { user, access, signOut } = useAuth();
   const account = access.status === "allowed" ? access.account : null;
 
   const toggleModel = (model: string) => {
+    if (!onModelsChange) return;
     if (selectedModels.includes(model)) {
       // At least one model must stay selected.
       if (selectedModels.length > 1) {
@@ -35,15 +39,18 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
   return (
     <header className="sticky top-0 z-50 w-full border-b bg-white/80 backdrop-blur-md">
       <div className="container mx-auto flex h-16 items-center justify-between gap-2 px-4 sm:px-6 lg:px-8">
-        <button type="button" onClick={onHome} className="flex items-center gap-2 group outline-none shrink-0">
-          <div className="bg-primary p-2 rounded-lg group-hover:bg-primary/90 transition-colors">
-            <GraduationCap className="h-6 w-6 text-white" />
-          </div>
-          <span className="hidden sm:inline text-xl font-bold tracking-tight text-primary font-headline">TestMaker</span>
-        </button>
+        {onHome ? (
+          <button type="button" onClick={onHome} className="flex items-center gap-2 group outline-none shrink-0">
+            <Logo />
+          </button>
+        ) : (
+          <Link href="/" className="flex items-center gap-2 group outline-none shrink-0">
+            <Logo />
+          </Link>
+        )}
 
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
-        {account && (
+        {account && onModelsChange && (
         <div role="group" aria-label="AI models" className="flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">
           {AVAILABLE_MODELS.map((model) => {
             const selected = selectedModels.includes(model.id);
@@ -81,6 +88,13 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
                 </span>
               )}
             </div>
+            {account && (
+              <Button asChild variant="ghost" size="icon" className="text-slate-500">
+                <Link href="/settings" aria-label="Settings" title="Settings">
+                  <Settings className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
             <Button variant="ghost" size="icon" onClick={signOut} aria-label="Sign out" title="Sign out" className="text-slate-500">
               <LogOut className="h-4 w-4" />
             </Button>
@@ -89,5 +103,16 @@ export function Navbar({ selectedModels, onModelsChange, onHome }: NavbarProps) 
         </div>
       </div>
     </header>
+  );
+}
+
+function Logo() {
+  return (
+    <>
+      <div className="bg-primary p-2 rounded-lg group-hover:bg-primary/90 transition-colors">
+        <GraduationCap className="h-6 w-6 text-white" />
+      </div>
+      <span className="hidden sm:inline text-xl font-bold tracking-tight text-primary font-headline">TestMaker</span>
+    </>
   );
 }

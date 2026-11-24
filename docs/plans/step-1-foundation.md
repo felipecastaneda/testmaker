@@ -205,12 +205,12 @@ Writes are validated against `def.schema`. Unknown keys are rejected.
 | `org.kind` (shown as "Individual / Institution") | org | — | — |
 | `generation.allowedModels` | org | all configured | ✓ |
 | `generation.defaultDifficulty` | org, course | `mixed` | |
-| `generation.instructions` (prepended to every prompt) | org, course | `""` | |
-| `generation.dailyLimitPerMember` | org | 300 | ✓ |
-| `generation.dailyLimitOrg` | org | off (personal), 3000 (institution) | ✓ |
-| `questions.defaultPoints` | org, course | 1 | |
+| `generation.orgInstructions` / `generation.courseInstructions` (both added to every prompt, org first) | org / course | `""` | |
 | `courses.instructorsCanCreate` | org | true | ✓ |
 | `assistants.canEdit` | org, course | false | ✓ |
+
+Deferred: `questions.defaultPoints` ships with points (PR 5). Per-org daily limits wait for
+institution billing; an org admin must not be able to raise their own limit above the platform's.
 
 The answers you gave (student identity, online/paper, standalone/LMS) become registry
 entries in the steps that implement them, for example `students.identityMethods` in step 2,
@@ -338,8 +338,8 @@ working against migrated data. Roll back the code, and the extra fields are igno
 |---|---|---|
 | 1 | Types, `users`/`orgs`/`members`, `access.ts`, migration script + lazy `ensurePersonalOrg`, signup gate. UI unchanged (everyone lands in their personal org). | L |
 | 2 | Courses: CRUD, staff, tests scoped to courses, library grouped by course, course picker in save dialog, indexes. | M |
-| 3 | Settings registry + resolution, `/settings` page (Profile, Organization, Courses), org switcher, model prefs move server-side. | L |
-| 4 | Members & invites (`/invite/[token]`), roles UI, Platform tab. | M |
+| 3 | Settings registry + resolution, `/settings` page (Profile, Organization, Courses), model prefs move server-side. | L |
+| 4 | Members & invites (`/invite/[token]`), roles UI, course staff UI, creating institutions, org switcher, Platform tab. | M |
 | 5 | Points & tags (schema, editor, exports, AI tags). Student projection + test. | S |
 | 6 | PDF & PPTX import. | S–M |
 

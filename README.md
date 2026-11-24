@@ -102,6 +102,14 @@ production data or spends API credits. First run: `npx playwright install chromi
   courses (a course must be empty to delete it; the personal "My tests" course can't be
   removed), choose the course when generating, and move tests between courses with their
   history.
+- **Settings** (`/settings`): your preferred AI models; organization settings (name,
+  allowed AI models, default difficulty, AI instructions, whether instructors can create
+  courses, whether assistants can edit) with **locks** that stop courses from overriding a
+  setting; and per-course overrides. Every setting is defined once in
+  `src/lib/settings/registry.ts` and resolved as *default → organization → course*
+  (`src/lib/settings/resolve.ts`). The server enforces them: generation rejects models
+  the organization hasn't enabled and adds the organization's and course's instructions
+  to the prompt.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.

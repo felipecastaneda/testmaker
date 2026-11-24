@@ -20,10 +20,19 @@ function getAdminApp(): App {
   return app;
 }
 
+// Next.js can load this module more than once (one copy per route bundle), but
+// firebase-admin returns the same Firestore instance to every copy, and settings()
+// throws if called twice. Keep the configured instance on globalThis.
+const shared = globalThis as typeof globalThis & { __testmakerDb?: Firestore };
+
 export function adminDb(): Firestore {
   if (!db) {
-    db = getFirestore(getAdminApp());
-    db.settings({ ignoreUndefinedProperties: true });
+    if (!shared.__testmakerDb) {
+      const instance = getFirestore(getAdminApp());
+      instance.settings({ ignoreUndefinedProperties: true });
+      shared.__testmakerDb = instance;
+    }
+    db = shared.__testmakerDb;
   }
   return db;
 }

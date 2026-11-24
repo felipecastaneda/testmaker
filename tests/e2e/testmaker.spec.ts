@@ -168,7 +168,7 @@ test.describe.serial("TestMaker", () => {
     // A course with tests can't be deleted.
     page.once("dialog", (d) => d.accept());
     await page.getByRole("button", { name: "Delete course Biology 101" }).click();
-    await expect(page.getByText("Move or delete them first.", { exact: false })).toBeVisible();
+    await expect(page.getByText("This course still has 1 test. Move or delete them first.", { exact: true })).toBeVisible();
 
     // Move the test to "My tests".
     await page.getByRole("button", { name: "Move Genetics Quiz" }).click();
@@ -195,6 +195,65 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("button", { name: "Delete course Biology 101" }).click();
     await expect(page.getByText("Course deleted", { exact: true })).toBeVisible();
     await expect(biology).toHaveCount(0);
+  });
+
+  test("settings: org and course settings shape generation; locks and preferences", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("link", { name: "Settings" }).click();
+    await expect(page.getByRole("heading", { name: "Settings" })).toBeVisible();
+    await expect(page.getByRole("tabpanel").getByText(E2E.teacher)).toBeVisible();
+
+    // Organization: rename, allow only GPT, add instructions, lock "assistants can edit".
+    await page.getByRole("tab", { name: "Organization" }).click();
+    await page.getByLabel("Name").fill("Teacher Workspace");
+    await page.getByRole("checkbox", { name: "Gemini 3.6" }).uncheck();
+    await page.getByLabel("Organization instructions for the AI").fill("Write in Spanish.");
+    await page.getByLabel("Lock for all courses").check();
+    await page.getByRole("button", { name: "Save organization settings" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+
+    // Course: its own instructions; the locked setting is read-only.
+    await page.getByRole("tab", { name: "Courses" }).click();
+    await expect(page.getByTestId("course-setting-assistants.canEdit").getByText("Set by your organization")).toBeVisible();
+    await expect(page.getByLabel("Assistants can edit tests")).toBeDisabled();
+    await page.getByLabel("Course instructions for the AI").fill("Focus on organelles.");
+    await page.getByRole("button", { name: "Save course settings" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+
+    // Settings survive a reload.
+    await page.reload();
+    await page.getByRole("tab", { name: "Organization" }).click();
+    await expect(page.getByLabel("Name")).toHaveValue("Teacher Workspace");
+    await expect(page.getByRole("checkbox", { name: "Gemini 3.6" })).not.toBeChecked();
+
+    // Generation: Gemini is skipped and both instructions reach the AI.
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+    await page.getByRole("button", { name: "Create New Test" }).click();
+    await expect(page.getByText("Some AI models will be skipped")).toBeVisible();
+    await expect(page.getByTestId("instructions-note")).toBeVisible();
+    await page.getByLabel("Test Name").fill("Spanish Quiz");
+    await page.getByLabel("Number of questions").fill("2");
+    await page.getByLabel("Or Paste Content Directly").fill(STUDY_TEXT);
+    await page.getByRole("button", { name: "Generate Questions" }).click();
+    await expect(page.getByRole("heading", { name: "Spanish Quiz" })).toBeVisible();
+    const cards = page.getByTestId("question-card");
+    await expect(cards).toHaveCount(2);
+    await expect(cards.getByText("Gemini 3.6")).toHaveCount(0);
+    await expect(cards.first().getByText("[Instructions: Write in Spanish. Focus on organelles.]", { exact: false })).toBeVisible();
+
+    // Profile: preferred models are saved to the account and drive the navbar picker.
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("checkbox", { name: "GPT-5.5" }).uncheck();
+    await page.getByRole("button", { name: "Save preferences" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+    await page.goto("/");
+    const picker = page.getByRole("group", { name: "AI models" });
+    await expect(picker.getByRole("button", { name: "GPT-5.5" })).toHaveAttribute("aria-pressed", "false");
+    await expect(picker.getByRole("button", { name: "Gemini 3.6" })).toHaveAttribute("aria-pressed", "true");
+    // ...and with the org allowing only GPT, nothing is left to generate with.
+    await page.getByRole("button", { name: "Create New Test" }).click();
+    await expect(page.getByText("None of your selected AI models are enabled here")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Generate Questions" })).toBeDisabled();
   });
 
   test("another allow-listed user gets a separate workspace", async ({ page }) => {
