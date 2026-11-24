@@ -123,6 +123,13 @@ production data or spends API credits. First run: `npx playwright install chromi
   (`src/lib/settings/resolve.ts`). The server enforces them: generation rejects models
   the organization hasn't enabled and adds the organization's and course's instructions
   to the prompt.
+- **Points and tags**: every question is worth points (default 1; new questions get the
+  course's *Default points per question* setting) and has topic tags (the AI suggests 1–3;
+  edit them freely). The review header shows the total, *Take test* scores by points, and
+  print/Word/text exports show each question's points and the total. GIFT and Aiken have
+  no per-question mark, so set points in Moodle.
+- **Student view** (`src/lib/student-view.ts`): `toStudentQuestion()` strips the answer,
+  explanation, quote, tags, difficulty and model. Anything sent to students must use it.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.

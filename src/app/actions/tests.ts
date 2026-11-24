@@ -13,6 +13,7 @@ import type {
 import { UserFacingError, withUser } from '@/server/action-result';
 import { serverConfig } from '@/server/config';
 import * as repo from '@/server/tests-repo';
+import { MAX_POINTS, normalizeTags } from '@/lib/question-utils';
 import { ensureUserWorkspace, listViewableCourseIds } from '@/server/workspace';
 
 const MAX_QUESTIONS_PER_SAVE = 500;
@@ -28,6 +29,9 @@ const QuestionSchema = z.object({
   sourceQuote: z.string().max(5_000).optional(),
   imageUrl: z.string().url().max(2_000).optional(),
   sourceModel: z.string().max(100).optional(),
+  points: z.number().min(0).max(MAX_POINTS).multipleOf(0.5, 'Points must be whole or half numbers.').optional(),
+  // Cleaned the same way the editor and the AI output are.
+  tags: z.array(z.string().max(200)).max(50).transform((t) => normalizeTags(t)).optional(),
 });
 
 function parseQuestions(questions: unknown, max = MAX_QUESTIONS_PER_SAVE): QuestionData[] {

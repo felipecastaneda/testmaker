@@ -30,6 +30,11 @@ const GeneratedQuestionSchema = z.object({
   explanation: z.string().describe('One or two sentences explaining why the correct answer is right.'),
   sourceQuote: z.string().describe('A short verbatim quote (one sentence) from the document that supports the answer.'),
   difficulty: z.enum(['easy', 'medium', 'hard']),
+  // Optional so a model that omits tags doesn't fail the whole batch; normalize() handles it.
+  tags: z
+    .array(z.string())
+    .optional()
+    .describe('Always include 1 to 3 short, lower-case topic tags naming the concepts tested, e.g. ["photosynthesis"]. Reuse the same tag for the same topic.'),
 });
 
 const GenerateQuestionSetOutputSchema = z.object({

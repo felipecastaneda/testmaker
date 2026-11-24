@@ -1,14 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Check, Edit2, Loader2, Plus, Quote, Trash2, X, Lightbulb } from "lucide-react";
+import { Check, Edit2, Loader2, Plus, Quote, Tag, Trash2, X, Lightbulb } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { getModelOption } from "@/ai/models";
-import { isTrueFalse, optionLetter } from "@/lib/question-utils";
+import { formatPoints, isTrueFalse, MAX_POINTS, normalizeTags, optionLetter, pointsOf } from "@/lib/question-utils";
 import type { QuestionData } from "@/lib/types";
 
 export type ViewMode = "author" | "student";
@@ -36,6 +36,11 @@ const DIFFICULTY_BADGE: Record<string, string> = {
 
 function validate(draft: QuestionData): string | null {
   if (!draft.question.trim() || !draft.correctAnswer.trim()) return "A question and a correct answer are required.";
+  const points = pointsOf(draft);
+  if (draft.points !== undefined && (!Number.isFinite(draft.points) || draft.points < 0 || draft.points > MAX_POINTS)) {
+    return `Points must be between 0 and ${MAX_POINTS}.`;
+  }
+  if (Math.round(points * 2) !== points * 2) return "Points must be whole or half numbers (e.g. 1 or 1.5).";
   if (isTrueFalse(draft)) return null;
   const distractors = draft.distractors.map((d) => d.trim()).filter(Boolean);
   if (distractors.length === 0) return "Each question needs at least one wrong option.";
@@ -46,6 +51,8 @@ function validate(draft: QuestionData): string | null {
 
 export function QuestionCard({ question: q, index, mode, options, selected, submitted, onSelect, onSave, onDelete }: QuestionCardProps) {
   const [draft, setDraft] = useState<QuestionData | null>(null);
+  // Tags are typed as comma-separated text and cleaned on save.
+  const [tagsText, setTagsText] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const isEditing = draft !== null && mode === "author";
@@ -53,7 +60,8 @@ export function QuestionCard({ question: q, index, mode, options, selected, subm
   const tf = isTrueFalse(q);
 
   const startEditing = () => {
-    setDraft({ ...q, distractors: [...q.distractors] });
+    setDraft({ ...q, distractors: [...q.distractors], points: pointsOf(q) });
+    setTagsText((q.tags ?? []).join(", "));
     setError(null);
   };
 
@@ -67,7 +75,9 @@ export function QuestionCard({ question: q, index, mode, options, selected, subm
         ? [draft.correctAnswer === "True" ? "False" : "True"]
         : draft.distractors.map((d) => d.trim()).filter(Boolean),
       explanation: draft.explanation?.trim() || undefined,
+      tags: normalizeTags(tagsText),
     };
+    if (!cleaned.tags?.length) delete cleaned.tags;
     const problem = validate(cleaned);
     if (problem) {
       setError(problem);
@@ -91,6 +101,9 @@ export function QuestionCard({ question: q, index, mode, options, selected, subm
               <Badge variant="outline" className="bg-white font-mono text-[10px] px-2 py-0.5 shrink-0">
                 QUESTION {index + 1}
               </Badge>
+              <Badge variant="outline" className="bg-white text-[10px] px-2 py-0.5 shrink-0" data-testid="question-points">
+                {formatPoints(pointsOf(q))}
+              </Badge>
               {mode === "author" && (
                 <>
                   {tf && <Badge variant="outline" className="text-[10px] bg-white">TRUE / FALSE</Badge>}
@@ -102,6 +115,13 @@ export function QuestionCard({ question: q, index, mode, options, selected, subm
                       {model?.label ?? q.sourceModel}
                     </Badge>
                   )}
+                  {!isEditing &&
+                    q.tags?.map((tag) => (
+                      <Badge key={tag} variant="secondary" className="text-[10px] font-normal gap-1" data-testid="question-tag">
+                        <Tag className="h-2.5 w-2.5" />
+                        {tag}
+                      </Badge>
+                    ))}
                 </>
               )}
             </div>
@@ -221,6 +241,35 @@ export function QuestionCard({ question: q, index, mode, options, selected, subm
                   </div>
                 </div>
               )}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-[120px_1fr]">
+              <div className="space-y-2">
+                <label htmlFor={`points-${q.id}`} className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Points
+                </label>
+                <Input
+                  id={`points-${q.id}`}
+                  type="number"
+                  min={0}
+                  max={MAX_POINTS}
+                  step={0.5}
+                  value={Number.isFinite(draft.points) ? draft.points : ""}
+                  onChange={(e) => setDraft({ ...draft, points: e.target.value === "" ? Number.NaN : Number(e.target.value) })}
+                  className="bg-white"
+                />
+              </div>
+              <div className="space-y-2">
+                <label htmlFor={`tags-${q.id}`} className="block text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                  Tags
+                </label>
+                <Input
+                  id={`tags-${q.id}`}
+                  value={tagsText}
+                  onChange={(e) => setTagsText(e.target.value)}
+                  placeholder="e.g. photosynthesis, cell structure"
+                  className="bg-white"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <p className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Explanation</p>

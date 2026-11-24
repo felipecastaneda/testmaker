@@ -42,9 +42,22 @@ describe("buildVariants", () => {
 describe("text and HTML", () => {
   it("includes answers and explanations in plain text", () => {
     const text = toPlainText("Bio", buildVariants(questions.slice(0, 1), 1));
-    expect(text).toMatch(/^Bio\n===\n\nQ1: Question 0\?/);
+    expect(text).toMatch(/^Bio\n===\n1 questions · 1 pt\n\nQ1 \(1 pt\): Question 0\?/);
     expect(text).toMatch(/Answer: [A-D]\) Right 0/);
     expect(text).toContain("Why: Because 0.");
+  });
+
+  it("shows each question's points and the total", () => {
+    const weighted = [{ ...questions[0], points: 2 }, { ...questions[1], points: 1.5 }, questions[2]];
+    const [variant] = buildVariants(weighted, 1);
+    const text = toPlainText("Bio", [variant]);
+    expect(text).toContain("3 questions · 4.5 pts");
+    expect(text).toContain("Q1 (2 pts): Question 0?");
+    expect(text).toContain("Q2 (1.5 pts): Question 1?");
+    expect(text).toContain("Q3 (1 pt): Question 2?");
+    const html = toPrintableHtml("Bio", [variant]);
+    expect(html).toContain('<span class="pts">(2 pts)</span>');
+    expect(html).toContain("3 questions · 4.5 pts");
   });
 
   it("escapes HTML in the printable version", () => {

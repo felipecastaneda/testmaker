@@ -55,6 +55,8 @@ function toStored(q: QuestionData, position: number): StoredQuestion {
     sourceQuote: q.sourceQuote,
     imageUrl: q.imageUrl,
     sourceModel: q.sourceModel,
+    points: q.points,
+    tags: q.tags?.length ? q.tags : undefined,
     position,
   };
 }

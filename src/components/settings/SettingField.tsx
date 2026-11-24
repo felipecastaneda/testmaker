@@ -75,6 +75,26 @@ export function SettingField({ settingKey, value, disabled, onChange }: SettingF
           <p className="text-xs text-muted-foreground">{def.help}</p>
         </div>
       );
+    case "number":
+      return (
+        <div className="space-y-1.5">
+          <label htmlFor={id} className="block text-sm font-medium text-slate-800">
+            {def.label}
+          </label>
+          <input
+            id={id}
+            type="number"
+            className="w-32 h-10 px-3 rounded-md border border-input bg-white text-sm disabled:opacity-60"
+            min={input.min}
+            max={input.max}
+            step={input.step}
+            value={typeof value === "number" ? value : ""}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value === "" ? input.min : Number(e.target.value))}
+          />
+          <p className="text-xs text-muted-foreground">{def.help}</p>
+        </div>
+      );
     case "models": {
       const selected = Array.isArray(value) ? (value as string[]) : [];
       return (

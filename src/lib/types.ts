@@ -16,6 +16,10 @@ export interface QuestionData {
   sourceQuote?: string;
   imageUrl?: string;
   sourceModel?: string;
+  /** Points this question is worth. Missing means 1. */
+  points?: number;
+  /** Lower-case topic tags, e.g. ["photosynthesis", "cell structure"]. */
+  tags?: string[];
 }
 
 export type SaveMode = "new_version" | "append" | "recreate";

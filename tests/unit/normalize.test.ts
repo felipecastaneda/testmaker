@@ -71,4 +71,16 @@ describe("normalizeGeneratedQuestions", () => {
     expect(out).toHaveLength(3);
     expect(out.every((q) => q.difficulty === "hard")).toBe(true);
   });
+
+  it("cleans AI tags and keeps at most three", () => {
+    const [withTags, without] = normalizeGeneratedQuestions(
+      [
+        { type: "true_false", question: "ATP comes from respiration.", correctAnswer: "true", tags: [" Cell Respiration", "#ATP", "atp", "energy", "extra"] },
+        { type: "true_false", question: "Mitochondria make ATP.", correctAnswer: "true", tags: [] },
+      ],
+      opts
+    );
+    expect(withTags.tags).toEqual(["cell respiration", "atp", "energy"]);
+    expect(without).not.toHaveProperty("tags");
+  });
 });
