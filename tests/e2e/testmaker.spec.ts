@@ -323,6 +323,100 @@ test.describe.serial("TestMaker", () => {
     await expect(page.getByTestId("assignment-item")).toHaveCount(1);
   });
 
+  test("students take an exam: join, autosave, resume, submit, grade, results policy, closing", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    // A 3-question test; "My tests" gives 2 points per question (set earlier).
+    await generate(page, "Exam Source", 3);
+
+    const assign = async (title: string, release: "Right after they submit" | "When the assignment closes", limit = "") => {
+      await page.getByRole("button", { name: "Assign online" }).click();
+      const dialog = page.getByRole("dialog");
+      await dialog.getByLabel("Title students see").fill(title);
+      await dialog.getByLabel("Time limit in minutes (optional)").fill(limit);
+      await dialog.getByLabel("Students see their results").selectOption({ label: release });
+      await dialog.getByRole("button", { name: "Create and open" }).click();
+      await expect(page.getByRole("heading", { name: title })).toBeVisible();
+      return (await page.getByTestId("join-code").textContent())!;
+    };
+    const join = async (code: string, name: string, id: string) => {
+      const student = await otherPerson(browser);
+      await student.goto("/take");
+      // Students may type the code in lower case with a dash.
+      await student.getByLabel("Exam code").fill(`${code.slice(0, 4).toLowerCase()}-${code.slice(4).toLowerCase()}`);
+      await student.getByRole("button", { name: "Continue" }).click();
+      await student.getByLabel("Full name").fill(name);
+      await student.getByLabel("Student ID").fill(id);
+      await student.getByRole("button", { name: "Start exam" }).click();
+      return student;
+    };
+
+    // --- Assignment 1: results right after submitting, with correct answers.
+    const code1 = await assign("Quiz A", "Right after they submit");
+    const ana = await join(code1, "Ana Pérez", "A-001");
+    const questions = ana.getByTestId("exam-question");
+    await expect(questions).toHaveCount(3);
+    await expect(ana.getByText("Ana Pérez · 0 of 3 answered")).toBeVisible();
+    await questions.nth(0).getByRole("radio", { name: /Correct answer/ }).click();
+    await questions.nth(1).getByRole("radio", { name: /Wrong answer/ }).first().click();
+    await expect(ana.getByTestId("save-status")).toHaveText("All answers saved");
+
+    // Refreshing resumes the same attempt with the saved answers.
+    await ana.reload();
+    await expect(ana.getByText("Ana Pérez · 2 of 3 answered")).toBeVisible();
+    await expect(questions.nth(0).getByRole("radio", { name: /Correct answer/ })).toHaveAttribute("aria-checked", "true");
+
+    ana.once("dialog", (d) => d.accept()); // one question unanswered
+    await ana.getByRole("button", { name: "Submit answers" }).click();
+    await expect(ana.getByTestId("student-score")).toHaveText("2 / 6 pts · 33%");
+    const results = ana.getByTestId("result-question");
+    await expect(results).toHaveCount(3);
+    await expect(results.nth(1).getByText("Correct answer:", { exact: false })).toBeVisible();
+
+    // The same student ID (typed differently) can't start a second attempt.
+    const impostor = await join(code1, "Someone Else", "a-001");
+    await expect(impostor.getByRole("alert").filter({ hasText: "already started" })).toBeVisible();
+    await impostor.context().close();
+
+    await page.reload();
+    await expect(page.getByTestId("assignment-stats")).toHaveText("1 started · 1 submitted");
+
+    // --- Assignment 2: results when it closes, 30-minute limit.
+    await page.goto("/");
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
+    const code2 = await assign("Quiz B", "When the assignment closes", "30");
+
+    const ben = await join(code2, "Ben", "B-002");
+    await expect(ben.getByTestId("time-remaining")).toHaveText(/^\s*(30:00|29:[0-5]\d)$/);
+    for (const q of await ben.getByTestId("exam-question").all()) await q.getByRole("radio", { name: /Correct answer/ }).click();
+    await expect(ben.getByTestId("save-status")).toHaveText("All answers saved");
+    ben.once("dialog", (d) => d.accept());
+    await ben.getByRole("button", { name: "Submit answers" }).click();
+    await expect(ben.getByTestId("results-pending")).toContainText("when the exam closes");
+
+    const carla = await join(code2, "Carla", "C-003");
+    await carla.getByTestId("exam-question").first().getByRole("radio", { name: /Correct answer/ }).click();
+    await expect(carla.getByTestId("save-status")).toHaveText("All answers saved");
+
+    // The professor closes it: Ben sees his score, Carla's saved answers are submitted.
+    await page.getByRole("button", { name: "Close now" }).click();
+    await expect(page.getByTestId("availability")).toHaveText("Closed");
+    await ben.reload();
+    await expect(ben.getByTestId("student-score")).toHaveText("6 / 6 pts · 100%");
+    await carla.reload();
+    await expect(carla.getByText("The exam ended", { exact: false })).toBeVisible();
+    await expect(carla.getByTestId("student-score")).toHaveText("2 / 6 pts · 33%");
+
+    // Nobody new can join a closed exam.
+    const late = await otherPerson(browser);
+    await late.goto(`/take/${code2}`);
+    await expect(late.getByTestId("exam-unavailable")).toHaveText("This exam is closed.");
+
+    await page.reload();
+    await expect(page.getByTestId("assignment-stats")).toHaveText("2 started · 2 submitted");
+    for (const p of [ana, ben, carla, late]) await p.context().close();
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();

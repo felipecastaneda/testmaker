@@ -139,7 +139,16 @@ production data or spends API credits. First run: `npx playwright install chromi
   window (opens/closes), time limit, question shuffling, and when students see results.
   Each gets a join link and an 8-character code (no 0/O/1/I/L). Manage them under
   *Assignments* in the navbar. Course/organization settings set the defaults. Students
-  take them at `/take/<code>` (coming in step 2, part 2).
+  take them at `/take/<code>` (or type the code at `/take`).
+- **Taking an exam (students, no account)**: name + student ID, one attempt per ID
+  (compared ignoring case and spaces). The browser keeps a secret attempt token
+  (`<assignment>.<attempt>.<secret>`; only a hash of the secret is stored), so a refresh or a
+  closed tab resumes the attempt on that device. Answers autosave; the server rejects them
+  after the deadline (+30 s grace) or once the exam is closed, and then submits what was
+  saved. Grading happens on the server; students see their score (and, if allowed, correct
+  answers and explanations) according to the assignment's results policy. Student actions
+  (`src/app/actions/take.ts`) never use Firebase Auth or the professor signup gate, and
+  only ever touch the one assignment or attempt they name.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.
@@ -166,6 +175,7 @@ invites/{sha256(token)}                      orgId, email, role, expiresAt, acce
 usage/{uid}_{yyyy-mm-dd}                     daily question count
 assignments/{id}                             options, status, joinCode, testVersion, stats, ...
 assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
+assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade
 joinCodes/{code}                             assignmentId
 _meta/platform                               signupMode, allowedEmails
 ```
