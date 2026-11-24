@@ -2,11 +2,16 @@
 
 import React, { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
-import { ArrowLeft, Building2, GraduationCap, Loader2, Lock, User } from "lucide-react";
+import { ArrowLeft, Building2, GraduationCap, Loader2, Lock, Plus, ShieldCheck, User, Users } from "lucide-react";
 import { Navbar } from "@/components/TestMaker/Navbar";
 import { useAccessGate } from "@/components/auth/AccessGate";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { SettingField } from "@/components/settings/SettingField";
+import { CourseStaff } from "@/components/settings/CourseStaff";
+import { MembersTab } from "@/components/settings/MembersTab";
+import { PlatformTab } from "@/components/settings/PlatformTab";
+import { createInstitution } from "@/app/actions/members";
+import { useCourses } from "@/hooks/use-courses";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
@@ -16,12 +21,14 @@ import { GROUP_LABELS, SETTING_KEYS, SETTINGS, type SettingGroup, type SettingKe
 import { resolveSetting } from "@/lib/settings/resolve";
 import type { SettingsOverview } from "@/lib/types";
 
-type Tab = "profile" | "organization" | "courses";
+type Tab = "profile" | "organization" | "members" | "courses" | "platform";
 
 const TABS: { id: Tab; label: string; icon: typeof User }[] = [
   { id: "profile", label: "Profile", icon: User },
   { id: "organization", label: "Organization", icon: Building2 },
+  { id: "members", label: "Members", icon: Users },
   { id: "courses", label: "Courses", icon: GraduationCap },
+  { id: "platform", label: "Platform", icon: ShieldCheck },
 ];
 
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
@@ -38,7 +45,9 @@ function groupKeys(keys: SettingKey[]): [SettingGroup, SettingKey[]][] {
 
 export default function SettingsPage() {
   const { ready, gate } = useAccessGate();
-  const { callAction } = useAuth();
+  const { callAction, access } = useAuth();
+  const isPlatformAdmin = access.status === "allowed" && access.account.isPlatformAdmin;
+  const tabs = TABS.filter((t) => t.id !== "platform" || isPlatformAdmin);
   const [tab, setTab] = useState<Tab>("profile");
   const [overview, setOverview] = useState<SettingsOverview | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -78,7 +87,7 @@ export default function SettingsPage() {
           ) : (
             <>
               <div role="tablist" aria-label="Settings sections" className="flex gap-1 p-1 bg-white border border-slate-200 rounded-xl w-fit">
-                {TABS.map((t) => (
+                {tabs.map((t) => (
                   <button
                     key={t.id}
                     type="button"
@@ -103,6 +112,10 @@ export default function SettingsPage() {
                   <ProfileTab overview={overview} onSaved={load} />
                 ) : tab === "organization" ? (
                   <OrganizationTab overview={overview} onSaved={load} />
+                ) : tab === "members" ? (
+                  <MembersTab overview={overview} onSaved={load} />
+                ) : tab === "platform" ? (
+                  <PlatformTab />
                 ) : (
                   <CoursesTab overview={overview} onSaved={load} />
                 )}
@@ -183,12 +196,23 @@ function ProfileTab({ overview, onSaved }: { overview: SettingsOverview; onSaved
 // ---------------------------------------------------------------------------
 
 function OrganizationTab({ overview, onSaved }: { overview: SettingsOverview; onSaved: () => Promise<void> }) {
-  const [orgId, setOrgId] = useState(overview.orgs[0]?.id ?? "");
-  const org = overview.orgs.find((o) => o.id === orgId);
+  const { access } = useAuth();
+  const canCreateInstitutions = access.status === "allowed" && access.account.canCreateInstitutions;
+  const [picked, setOrgId] = useState<string | null>(null);
+  const org = overview.orgs.find((o) => o.id === picked) ?? overview.orgs[0];
+  const orgId = org?.id ?? "";
   if (!org) return <p className="text-sm text-slate-500">You don&apos;t belong to any organization yet.</p>;
 
   return (
     <div className="space-y-6">
+      {canCreateInstitutions && (
+        <NewInstitution
+          onCreated={async (id) => {
+            await onSaved();
+            setOrgId(id);
+          }}
+        />
+      )}
       {overview.orgs.length > 1 && (
         <div className="space-y-1.5">
           <label htmlFor="org-select" className="text-sm font-medium">
@@ -297,14 +321,63 @@ function OrgForm({ org, onSaved }: { org: SettingsOverview["orgs"][number]; onSa
   );
 }
 
+function NewInstitution({ onCreated }: { onCreated: (orgId: string) => Promise<void> }) {
+  const { callAction } = useAuth();
+  const { reload: reloadCourses } = useCourses();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const [busy, setBusy] = useState(false);
+
+  const submit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setBusy(true);
+    const result = await callAction((t) => createInstitution(t, name));
+    setBusy(false);
+    if (!result.success || !result.data) {
+      toast({ title: "Couldn't create institution", description: result.error, variant: "destructive" });
+      return;
+    }
+    await reloadCourses();
+    await onCreated(result.data);
+    toast({ title: "Institution created", description: `"${name.trim()}" is now your active organization.` });
+    setOpen(false);
+    setName("");
+  };
+
+  if (!open) {
+    return (
+      <Button variant="outline" size="sm" onClick={() => setOpen(true)}>
+        <Plus className="h-4 w-4 mr-1" /> New institution
+      </Button>
+    );
+  }
+  return (
+    <form onSubmit={submit} className="flex flex-wrap items-end gap-3 p-4 bg-slate-50 rounded-xl border border-slate-100">
+      <div className="space-y-1.5 flex-1 min-w-[220px]">
+        <label htmlFor="institution-name" className="text-sm font-medium">
+          Institution name
+        </label>
+        <Input id="institution-name" value={name} maxLength={80} onChange={(e) => setName(e.target.value)} placeholder="e.g., Universidad Nacional" autoFocus />
+      </div>
+      <Button type="submit" disabled={busy || !name.trim()}>
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create institution"}
+      </Button>
+      <Button type="button" variant="ghost" onClick={() => setOpen(false)}>
+        Cancel
+      </Button>
+    </form>
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Courses
 // ---------------------------------------------------------------------------
 
 function CoursesTab({ overview, onSaved }: { overview: SettingsOverview; onSaved: () => Promise<void> }) {
   const manageable = overview.courses.filter((c) => c.canManage);
-  const [courseId, setCourseId] = useState(manageable[0]?.id ?? "");
-  const course = manageable.find((c) => c.id === courseId);
+  const [picked, setCourseId] = useState<string | null>(null);
+  const course = manageable.find((c) => c.id === picked) ?? manageable[0];
+  const courseId = course?.id ?? "";
   if (!course) {
     return <p className="text-sm text-slate-500">You don&apos;t manage any courses. Create one from the library.</p>;
   }
@@ -337,6 +410,7 @@ function CoursesTab({ overview, onSaved }: { overview: SettingsOverview; onSaved
         orgSettings={org?.settings ?? {}}
         onSaved={onSaved}
       />
+      {org?.kind === "institution" && <CourseStaff key={course.id} courseId={course.id} />}
     </div>
   );
 }

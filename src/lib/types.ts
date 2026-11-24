@@ -100,6 +100,8 @@ export interface CourseSummary {
 export interface CoursesOverview {
   orgs: (OrgSummary & { canCreateCourses: boolean })[];
   courses: CourseSummary[];
+  /** The organization the user is working in; the library and generate form show its courses. */
+  activeOrgId: string;
 }
 
 export interface CourseInput {
@@ -119,4 +121,27 @@ export interface SettingsOverview {
     canManage: boolean;
     settings: { values?: Record<string, unknown> };
   }[];
+}
+
+export interface MemberSummary {
+  uid: string;
+  email: string;
+  role: OrgRole;
+  joinedAt: string;
+}
+
+export interface OrgMembersView {
+  myRole: OrgRole;
+  members: MemberSummary[];
+  invites: { id: string; email: string; role: OrgRole; expiresAt: string }[];
+}
+
+export type InviteInfo =
+  | { status: "valid"; orgName: string; role: OrgRole; email: string; emailMatches: boolean }
+  | { status: "not_found" | "used" | "revoked" | "expired"; message: string };
+
+export interface CourseStaffView {
+  staff: { uid: string; email: string; role: CourseRole }[];
+  /** Organization members not on the staff yet. */
+  candidates: { uid: string; email: string }[];
 }

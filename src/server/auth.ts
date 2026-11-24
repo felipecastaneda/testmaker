@@ -27,17 +27,22 @@ export interface AuthedUser {
  * because every signed-in user gets one.
  */
 async function passesSignupGate(uid: string, email: string): Promise<boolean> {
-  if (serverConfig.allowedEmails.has(email)) return true;
+  if (serverConfig.allowedEmails.has(email) || serverConfig.platformAdminEmails.has(email)) return true;
   const platform = await getPlatformConfig();
   if (platform.signupMode === "open" || platform.allowedEmails.has(email)) return true;
   return hasInstitutionMembership(uid);
 }
 
+export function isPlatformAdmin(user: AuthedUser): boolean {
+  return serverConfig.platformAdminEmails.has(user.email);
+}
+
 /**
- * Verify a Firebase ID token and enforce the access policy:
- * signed in, email verified, and allowed through the signup gate.
+ * Verify a Firebase ID token: signed in with a verified email. Does NOT apply the signup
+ * gate, so only use it for actions an invitee needs before they have access (accepting
+ * an invite). Everything else goes through requireUser().
  */
-export async function requireUser(idToken: string | null | undefined): Promise<AuthedUser> {
+export async function requireVerifiedUser(idToken: string | null | undefined): Promise<AuthedUser> {
   if (!idToken) throw new AuthError("unauthenticated", "Please sign in.");
 
   let decoded;
@@ -52,8 +57,17 @@ export async function requireUser(idToken: string | null | undefined): Promise<A
   if (!decoded.email_verified) {
     throw new AuthError("unverified", "Please verify your email address first.");
   }
-  if (!(await passesSignupGate(decoded.uid, email))) {
+  return { uid: decoded.uid, email };
+}
+
+/**
+ * Verify a Firebase ID token and enforce the access policy:
+ * signed in, email verified, and allowed through the signup gate.
+ */
+export async function requireUser(idToken: string | null | undefined): Promise<AuthedUser> {
+  const user = await requireVerifiedUser(idToken);
+  if (!(await passesSignupGate(user.uid, user.email))) {
     throw new AuthError("forbidden", "This account isn't on the access list for TestMaker.");
   }
-  return { uid: decoded.uid, email };
+  return user;
 }

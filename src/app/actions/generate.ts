@@ -11,6 +11,8 @@ import { serverConfig } from '@/server/config';
 import { fakeGenerate } from '@/server/fake-ai';
 import { getDailyUsage, releaseDailyQuota, reserveDailyQuota } from '@/server/tests-repo';
 import { getGenerationSettings, getSelectedModelsPref } from '@/server/settings-repo';
+import { isPlatformAdmin } from '@/server/auth';
+import { canCreateInstitutions } from '@/server/members-repo';
 import { ensureUserWorkspace, requireCourseAccess } from '@/server/workspace';
 
 const modelIds = AVAILABLE_MODELS.map((m) => m.id) as [string, ...string[]];
@@ -33,6 +35,8 @@ export interface AccountStatus {
   usedToday: number;
   /** The user's preferred models, or null if never chosen. */
   selectedModels: string[] | null;
+  isPlatformAdmin: boolean;
+  canCreateInstitutions: boolean;
 }
 
 /**
@@ -41,12 +45,20 @@ export interface AccountStatus {
  */
 export async function getAccountStatus(idToken: string): Promise<ActionResult<AccountStatus>> {
   return withUser(idToken, async (user) => {
-    const [usedToday, , selectedModels] = await Promise.all([
+    const [usedToday, , selectedModels, institutions] = await Promise.all([
       getDailyUsage(user.uid),
       ensureUserWorkspace(user),
       getSelectedModelsPref(user.uid),
+      canCreateInstitutions(user),
     ]);
-    return { email: user.email, dailyLimit: serverConfig.dailyQuestionLimit, usedToday, selectedModels };
+    return {
+      email: user.email,
+      dailyLimit: serverConfig.dailyQuestionLimit,
+      usedToday,
+      selectedModels,
+      isPlatformAdmin: isPlatformAdmin(user),
+      canCreateInstitutions: institutions,
+    };
   });
 }
 

@@ -17,6 +17,10 @@ export const serverConfig = {
   get allowedEmails() {
     return parseEmailList(process.env.ALLOWED_EMAILS);
   },
+  /** May manage signup and create institutions (Settings → Platform). */
+  get platformAdminEmails() {
+    return parseEmailList(process.env.PLATFORM_ADMIN_EMAILS);
+  },
   /** Tests created before accounts existed are given to this user on first sign-in. */
   get legacyOwnerEmail() {
     return process.env.LEGACY_OWNER_EMAIL?.trim().toLowerCase() || null;

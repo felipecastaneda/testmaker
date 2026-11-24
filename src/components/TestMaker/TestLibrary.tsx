@@ -47,7 +47,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
   const [moving, setMoving] = useState<TestSummary | null>(null);
   const { toast } = useToast();
   const { callAction } = useAuth();
-  const { overview, error: coursesError, reload: reloadCourses } = useCourses();
+  const { overview, error: coursesError, reload: reloadCourses, activeCourses } = useCourses();
 
   const fetchTests = useCallback(async () => {
     setLoading(true);
@@ -114,12 +114,14 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
     await reloadCourses();
   };
 
-  const courses = overview?.courses ?? [];
+  // With several organizations, the library shows the active one (switch in the navbar).
+  const courses = activeCourses;
   const orgName = (orgId: string) => overview?.orgs.find((o) => o.id === orgId)?.name;
-  const multipleOrgs = (overview?.orgs.length ?? 0) > 1;
-  const canCreate = overview?.orgs.some((o) => o.canCreateCourses) ?? false;
+  const canCreate = overview?.orgs.find((o) => o.id === overview.activeOrgId)?.canCreateCourses ?? false;
   const hasArchived = courses.some((c) => c.archived);
-  const moveTargets = courses.filter((c) => c.canEdit && !c.archived);
+  // Tests can move to any course the user can edit, in any of their organizations.
+  const moveTargets = (overview?.courses ?? []).filter((c) => c.canEdit && !c.archived);
+  const showOrgInMove = (overview?.orgs.length ?? 0) > 1;
 
   const query = search.trim().toLowerCase();
   const visibleCourses = courses.filter(
@@ -133,6 +135,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
     // While searching, only show courses with a match.
     .filter((s) => !query || s.tests.length > 0);
   const onlyDefaultCourse = courses.length === 1 && courses[0].isDefault;
+  const noCourses = courses.length === 0;
   const loadingAll = loading || (!overview && !coursesError);
 
   return (
@@ -196,6 +199,14 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
           <h3 className="text-lg font-semibold text-rose-700">Library unavailable</h3>
           <p className="text-sm text-rose-600">{loadError ?? coursesError}</p>
         </div>
+      ) : noCourses ? (
+        <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+          <FileJson className="mx-auto h-12 w-12 text-slate-300 mb-4" />
+          <h3 className="text-lg font-semibold text-slate-700">No courses yet</h3>
+          <p className="text-sm text-slate-500">
+            {canCreate ? "Create a course to start adding tests." : "You haven't been added to any course in this organization yet."}
+          </p>
+        </div>
       ) : sections.length === 0 || (onlyDefaultCourse && tests.length === 0) ? (
         <div className="text-center py-20 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
           <FileJson className="mx-auto h-12 w-12 text-slate-300 mb-4" />
@@ -215,7 +226,6 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
                   {(course.code || course.term) && (
                     <span className="text-xs text-muted-foreground">{[course.code, course.term].filter(Boolean).join(" · ")}</span>
                   )}
-                  {multipleOrgs && <Badge variant="outline" className="text-[10px]">{orgName(course.orgId)}</Badge>}
                   {course.archived && <Badge variant="secondary" className="text-[10px]">Archived</Badge>}
                 </div>
                 {course.canManage && (
@@ -289,7 +299,7 @@ export function TestLibrary({ onSelectTest }: TestLibraryProps) {
         <MoveTestDialog
           test={moving}
           targets={moveTargets.filter((c) => c.id !== moving.courseId)}
-          orgName={multipleOrgs ? orgName : undefined}
+          orgName={showOrgInMove ? orgName : undefined}
           onClose={() => setMoving(null)}
           onMoved={(courseId) => setTests((prev) => prev.map((t) => (t.id === moving.id ? { ...t, courseId } : t)))}
         />

@@ -18,6 +18,10 @@ export const E2E = {
   colleague: "colleague@example.com",
   /** Not allow-listed; gets in by being a member of an institution. */
   invitee: "invitee@example.com",
+  /** Joins an institution through an invite link. */
+  newcomer: "newcomer@example.com",
+  /** Added to the allow-list from Settings → Platform. */
+  late: "late@example.com",
   password: "correct-horse-battery",
 };
 
@@ -49,6 +53,7 @@ export default defineConfig({
       FIRESTORE_EMULATOR_HOST: E2E.firestoreHost,
       TESTMAKER_FAKE_AI: "1",
       ALLOWED_EMAILS: `${E2E.teacher},${E2E.colleague}`,
+      PLATFORM_ADMIN_EMAILS: E2E.teacher,
       LEGACY_OWNER_EMAIL: E2E.teacher,
       DAILY_QUESTION_LIMIT: "100",
     },
