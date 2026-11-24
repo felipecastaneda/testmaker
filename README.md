@@ -74,7 +74,7 @@ Changing a secret takes effect on the next rollout (push to `main`, or
 | `npm run emulators` | Start the Auth and Firestore emulators |
 | `npm run genkit:dev` | Genkit developer UI for the AI flow |
 | `npx tsx test-models.ts` | Smoke-test each configured model with real API keys |
-| `npm run migrate:step1` | Organizations migration (dry run; add `-- --apply`) |
+| `npm run migrate:step1 -- --project=<id>` | Organizations migration (dry run; add `--apply`) |
 
 The end-to-end suite runs against a `demo-testmaker` emulator project with a deterministic
 fake LLM (`TESTMAKER_FAKE_AI=1`, ignored when `NODE_ENV=production`), so it never touches
@@ -137,8 +137,8 @@ after deploying the indexes:
 
 ```bash
 gcloud firestore export gs://<bucket>/backups/pre-step1   # backup
-npm run migrate:step1                                      # dry run: shows what would change
-npm run migrate:step1 -- --apply
+npm run migrate:step1 -- --project=testmaker-3fa6b            # dry run: shows what would change
+npm run migrate:step1 -- --project=testmaker-3fa6b --apply
 ```
 
 The script only adds documents and fields, and running it again does nothing new.

@@ -11,11 +11,12 @@
  * done for everyone at once.
  *
  * Usage (dry run by default):
- *   npm run migrate:step1             # report what would change
- *   npm run migrate:step1 -- --apply  # make the changes
+ *   npm run migrate:step1 -- --project=testmaker-3fa6b            # report what would change
+ *   npm run migrate:step1 -- --project=testmaker-3fa6b --apply    # make the changes
  *
- * Credentials: Application Default Credentials (`gcloud auth application-default login`)
- * against NEXT_PUBLIC_FIREBASE_PROJECT_ID from .env.local, or FIRESTORE_EMULATOR_HOST and
+ * The project must be given (--project, or NEXT_PUBLIC_FIREBASE_PROJECT_ID in .env.local);
+ * the script refuses to guess. Credentials: Application Default Credentials
+ * (`gcloud auth application-default login`), or FIRESTORE_EMULATOR_HOST and
  * FIREBASE_AUTH_EMULATOR_HOST for the emulators. Back up first:
  *   gcloud firestore export gs://<bucket>/backups/pre-step1
  */
@@ -27,10 +28,20 @@ import { adoptOrphanTests, ensureUserWorkspace } from "@/server/workspace";
 loadEnv({ path: ".env.local" });
 
 const apply = process.argv.includes("--apply");
+const projectArg = process.argv.find((a) => a.startsWith("--project="))?.slice("--project=".length);
 
 async function main() {
+  // Never fall back to gcloud's default project: that silently targets whatever project
+  // the machine was last used for.
+  if (projectArg) process.env.GCLOUD_PROJECT = projectArg;
+  const projectId = projectArg ?? process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? process.env.GCLOUD_PROJECT;
+  if (!projectId) {
+    throw new Error("No project given. Run with --project=<firebase-project-id> (or set NEXT_PUBLIC_FIREBASE_PROJECT_ID in .env.local).");
+  }
+  if (projectArg && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID && process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== projectArg) {
+    throw new Error(`--project=${projectArg} doesn't match NEXT_PUBLIC_FIREBASE_PROJECT_ID=${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID}.`);
+  }
   const db = adminDb();
-  const projectId = process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? process.env.GCLOUD_PROJECT ?? "(default)";
   const target = process.env.FIRESTORE_EMULATOR_HOST ? `emulator ${process.env.FIRESTORE_EMULATOR_HOST}` : "PRODUCTION";
   console.log(`${apply ? "APPLYING" : "DRY RUN"} against project ${projectId} (${target})\n`);
 
