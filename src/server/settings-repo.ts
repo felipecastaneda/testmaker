@@ -129,6 +129,7 @@ export async function getGenerationSettings(orgId: string, courseId: string) {
   const orgSettings = org.get("settings") as StoredSettings | undefined;
   const courseSettings = course.get("settings") as StoredSettings | undefined;
   return {
+    defaultPoints: resolveSetting("questions.defaultPoints", orgSettings, courseSettings).value,
     allowedModels: resolveSetting("generation.allowedModels", orgSettings).value,
     instructions: [
       resolveSetting("generation.orgInstructions", orgSettings).value,

@@ -209,7 +209,7 @@ Writes are validated against `def.schema`. Unknown keys are rejected.
 | `courses.instructorsCanCreate` | org | true | ✓ |
 | `assistants.canEdit` | org, course | false | ✓ |
 
-Deferred: `questions.defaultPoints` ships with points (PR 5). Per-org daily limits wait for
+`questions.defaultPoints` (org, course, default 1) shipped with points in PR 5. Per-org daily limits wait for
 institution billing; an org admin must not be able to raise their own limit above the platform's.
 
 The answers you gave (student identity, online/paper, standalone/LMS) become registry
@@ -255,7 +255,7 @@ models in `generation.allowedModels` can be chosen.
 
 There are no students yet, but the projection is added and tested now:
 
-- `src/server/projections.ts` → `toStudentQuestion(q)` strips `correctAnswer`,
+- `src/lib/student-view.ts` → `toStudentQuestion(q, seed)` strips `correctAnswer`,
   `explanation`, `sourceQuote`, `sourceModel`, and merges and shuffles the options with a seeded
   shuffle.
 - A unit test confirms no answer-revealing field survives. "Take test" preview stays as is

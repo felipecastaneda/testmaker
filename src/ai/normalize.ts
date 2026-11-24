@@ -1,3 +1,4 @@
+import { normalizeTags } from "@/lib/question-utils";
 import type { Difficulty, DifficultySetting, QuestionType } from "@/lib/types";
 
 export interface RawGeneratedQuestion {
@@ -8,6 +9,7 @@ export interface RawGeneratedQuestion {
   explanation?: string;
   sourceQuote?: string;
   difficulty?: string;
+  tags?: string[];
 }
 
 export interface NormalizedQuestion {
@@ -18,7 +20,11 @@ export interface NormalizedQuestion {
   explanation?: string;
   sourceQuote?: string;
   difficulty?: Difficulty;
+  tags?: string[];
 }
+
+/** The AI suggests at most this many tags per question. */
+export const MAX_AI_TAGS = 3;
 
 export interface NormalizeOptions {
   sourceText: string;
@@ -88,6 +94,10 @@ export function normalizeGeneratedQuestions(
       explanation: item.explanation?.trim() || undefined,
       sourceQuote: verifiedQuote,
       difficulty: difficulty === "mixed" ? itemDifficulty : difficulty,
+      ...(() => {
+        const tags = normalizeTags(item.tags, MAX_AI_TAGS);
+        return tags.length ? { tags } : {};
+      })(),
     });
     if (result.length >= count) break;
   }

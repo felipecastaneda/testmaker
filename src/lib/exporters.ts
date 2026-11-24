@@ -1,5 +1,5 @@
 import { createZip } from "./zip-writer";
-import { optionLetter, orderOptions } from "./question-utils";
+import { formatPoints, optionLetter, orderOptions, pointsOf, totalPoints } from "./question-utils";
 import { seededShuffle } from "./utils";
 import type { QuestionData } from "./types";
 
@@ -37,6 +37,10 @@ export function buildVariants(questions: QuestionData[], count: number): TestVar
 const variantTitle = (title: string, variant: TestVariant, total: number) =>
   total > 1 ? `${title} (Version ${variant.label})` : title;
 
+/** "12 questions · 15 pts" */
+const summary = (variant: TestVariant) =>
+  `${variant.questions.length} questions · ${formatPoints(totalPoints(variant.questions.map((v) => v.question)))}`;
+
 // ---------------------------------------------------------------------------
 // Plain text
 // ---------------------------------------------------------------------------
@@ -48,14 +52,14 @@ export function toPlainText(title: string, variants: TestVariant[]): string {
       const body = variant.questions
         .map(({ question, options, correctIndex }, i) =>
           [
-            `Q${i + 1}: ${question.question}`,
+            `Q${i + 1} (${formatPoints(pointsOf(question))}): ${question.question}`,
             ...options.map((opt, idx) => `   ${optionLetter(idx)}) ${opt}`),
             `Answer: ${optionLetter(correctIndex)}) ${question.correctAnswer}`,
             ...(question.explanation ? [`Why: ${question.explanation}`] : []),
           ].join("\n")
         )
         .join("\n\n");
-      return `${heading}\n${"=".repeat(heading.length)}\n\n${body}\n`;
+      return `${heading}\n${"=".repeat(heading.length)}\n${summary(variant)}\n\n${body}\n`;
     })
     .join("\n\n");
 }
@@ -80,7 +84,7 @@ export function toPrintableHtml(title: string, variants: TestVariant[]): string 
       const questionHtml = variant.questions
         .map(
           ({ question, options }, i) => `<section class="q">
-            <p class="stem"><strong>${i + 1}.</strong> ${escapeHtml(question.question)}</p>
+            <p class="stem"><strong>${i + 1}.</strong> ${escapeHtml(question.question)} <span class="pts">(${formatPoints(pointsOf(question))})</span></p>
             <ol type="A">${options.map((o) => `<li>${escapeHtml(o)}</li>`).join("")}</ol>
           </section>`
         )
@@ -93,7 +97,7 @@ export function toPrintableHtml(title: string, variants: TestVariant[]): string 
         .join("");
       return `<div class="${vIdx > 0 ? "page" : ""}">
           <h1>${heading}</h1>
-          <p class="meta">${variant.questions.length} questions · Name: ______________________ · Date: __________</p>
+          <p class="meta">${escapeHtml(summary(variant))} · Name: ______________________ · Date: __________ · Score: ______</p>
           ${questionHtml}
         </div>
         <div class="page key"><h2>Answer Key — ${heading}</h2><ul>${keyHtml}</ul></div>`;
@@ -107,6 +111,7 @@ export function toPrintableHtml(title: string, variants: TestVariant[]): string 
       .meta { color: #64748b; font-size: 13px; margin-bottom: 32px; }
       .q { break-inside: avoid; margin-bottom: 20px; }
       .stem { margin: 0 0 6px; }
+      .pts { color: #64748b; font-size: 12px; white-space: nowrap; }
       ol { margin: 0; padding-left: 28px; }
       li { margin: 2px 0; }
       .page { break-before: page; }
@@ -145,9 +150,9 @@ export function buildDocxDocumentXml(title: string, variants: TestVariant[]): st
   variants.forEach((variant, vIdx) => {
     const heading = variantTitle(title, variant, variants.length);
     body.push(paragraph(heading, { bold: true, size: 36, pageBreakBefore: vIdx > 0, spaceAfter: 120 }));
-    body.push(paragraph(`${variant.questions.length} questions    Name: ____________________    Date: __________`, { spaceAfter: 360 }));
+    body.push(paragraph(`${summary(variant)}    Name: ____________________    Date: __________    Score: ______`, { spaceAfter: 360 }));
     variant.questions.forEach(({ question, options }, i) => {
-      body.push(paragraph(`${i + 1}. ${question.question}`, { bold: true, spaceAfter: 60 }));
+      body.push(paragraph(`${i + 1}. ${question.question} (${formatPoints(pointsOf(question))})`, { bold: true, spaceAfter: 60 }));
       options.forEach((opt, idx) => body.push(paragraph(`${optionLetter(idx)}) ${opt}`, { indent: 360, spaceAfter: 20 })));
       body.push(paragraph("", { spaceAfter: 120 }));
     });
@@ -189,7 +194,10 @@ export function escapeGift(text: string): string {
   return text.replace(/([\\~=#{}:])/g, "\\$1").replace(/\r?\n/g, "\\n");
 }
 
-/** GIFT import format (Moodle). Moodle shuffles options itself, so no variants here. */
+/**
+ * GIFT import format (Moodle). Moodle shuffles options itself, so no variants here.
+ * GIFT has no per-question mark, so points aren't exported; set them in Moodle.
+ */
 export function toGift(title: string, questions: QuestionData[]): string {
   const header = `// ${title.replace(/\r?\n/g, " ")}\n// Exported from TestMaker\n\n`;
   return (

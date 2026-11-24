@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { deleteQuestion, reorderQuestions, updateQuestion } from "@/app/actions/tests";
 import { toast } from "@/hooks/use-toast";
-import { orderOptions } from "@/lib/question-utils";
+import { formatPoints, orderOptions, totalPoints } from "@/lib/question-utils";
 import { shuffle } from "@/lib/utils";
 import type { QuestionData } from "@/lib/types";
 import { QuestionCard, type ViewMode } from "./QuestionCard";
@@ -45,16 +45,22 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
   }, [questions, attempt]);
 
   const score = useMemo(() => {
-    const correct = questions.filter((q) => answers[q.id] === q.correctAnswer).length;
+    const right = questions.filter((q) => answers[q.id] === q.correctAnswer);
+    const correct = right.length;
     const answered = questions.filter((q) => answers[q.id] !== undefined).length;
     const total = questions.length;
+    // The percentage is weighted by points, like a real grade.
+    const earned = totalPoints(right);
+    const possible = totalPoints(questions);
     return {
       correct,
       answered,
       total,
+      earned,
+      possible,
       incorrect: answered - correct,
       unanswered: total - answered,
-      percentage: total === 0 ? 0 : Math.round((correct / total) * 100),
+      percentage: possible === 0 ? 0 : Math.round((earned / possible) * 100),
     };
   }, [questions, answers]);
 
@@ -122,6 +128,7 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
           </h2>
           <p className="text-sm text-muted-foreground">
             {questions.length} question{questions.length === 1 ? "" : "s"} ·{" "}
+            <span data-testid="total-points">{formatPoints(totalPoints(questions))}</span> ·{" "}
             {testId ? "Changes are saved to your library automatically." : "Not saved to your library."}
           </p>
         </div>
@@ -229,6 +236,9 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
               <p className="text-lg text-slate-500">
                 You correctly answered <span className="font-bold text-primary">{score.correct}</span> out of{" "}
                 <span className="font-bold text-slate-700">{score.total}</span> questions.
+              </p>
+              <p className="text-sm text-slate-500" data-testid="score-points">
+                {formatPoints(score.earned).replace(/ pts?$/, "")} of {formatPoints(score.possible)}
               </p>
               <div className="flex flex-wrap gap-2 pt-2 justify-center md:justify-start">
                 <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200">{score.correct} Correct</Badge>

@@ -13,12 +13,13 @@ import { AVAILABLE_MODELS } from "@/ai/models";
  */
 
 export type SettingScope = "org" | "course";
-export type SettingGroup = "generation" | "courses";
+export type SettingGroup = "generation" | "questions" | "courses";
 
 type Input =
   | { kind: "boolean" }
   | { kind: "select"; options: { value: string; label: string }[] }
   | { kind: "text"; maxLength: number; placeholder?: string }
+  | { kind: "number"; min: number; max: number; step: number }
   | { kind: "models" };
 
 interface SettingDef<T> {
@@ -89,6 +90,16 @@ export const SETTINGS = {
     default: "",
     input: { kind: "text", maxLength: 2_000, placeholder: "e.g., Focus on applying concepts, not definitions." },
   }),
+  "questions.defaultPoints": define<number>({
+    label: "Default points per question",
+    help: "What new questions are worth when they're generated. You can change each question afterwards.",
+    group: "questions",
+    scopes: ["org", "course"],
+    lockable: false,
+    schema: z.number().min(0).max(100).multipleOf(0.5, "Use whole or half points."),
+    default: 1,
+    input: { kind: "number", min: 0, max: 100, step: 0.5 },
+  }),
   "courses.instructorsCanCreate": define<boolean>({
     label: "Instructors can create courses",
     help: "When off, only owners and admins can create courses.",
@@ -119,6 +130,7 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 
 export const GROUP_LABELS: Record<SettingGroup, string> = {
   generation: "Question generation",
+  questions: "Questions",
   courses: "Courses and staff",
 };
 

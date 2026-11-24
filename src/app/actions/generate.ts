@@ -124,6 +124,6 @@ export async function generateQuestionBatch(
       await releaseDailyQuota(user.uid, req.count - questions.length);
     }
 
-    return questions.map((q) => ({ ...q, id: randomUUID(), sourceModel: req.model }));
+    return questions.map((q) => ({ ...q, id: randomUUID(), sourceModel: req.model, points: settings.defaultPoints }));
   });
 }

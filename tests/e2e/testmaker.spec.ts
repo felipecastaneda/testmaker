@@ -163,6 +163,51 @@ test.describe.serial("TestMaker", () => {
     await expect(page.getByRole("heading", { name: "Legacy Study Guide" })).toHaveCount(0);
   });
 
+  test("points and tags: course default, AI tags, editing, weighted score", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    // New questions in "My tests" are worth 2 points.
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Courses" }).click();
+    const defaultPoints = page.getByTestId("course-setting-questions.defaultPoints");
+    await defaultPoints.getByLabel("Use the organization's setting").uncheck();
+    await defaultPoints.getByLabel("Default points per question").fill("2");
+    await page.getByRole("button", { name: "Save course settings" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+    await generate(page, "Points Quiz", 2);
+    const cards = page.getByTestId("question-card");
+    await expect(page.getByTestId("total-points")).toHaveText("4 pts");
+    await expect(cards.first().getByTestId("question-points")).toHaveText("2 pts");
+    // AI tags arrive cleaned up (lower-case, no "#").
+    await expect(cards.first().getByTestId("question-tag").first()).toHaveText("cell biology");
+
+    // Edit one question's points and tags.
+    const first = cards.first();
+    await first.getByRole("button", { name: "Edit question" }).click();
+    await first.getByLabel("Points").fill("3");
+    await first.getByLabel("Tags").fill("Genetics, cell biology, genetics");
+    await first.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByText("Question updated", { exact: true })).toBeVisible();
+    await expect(page.getByTestId("total-points")).toHaveText("5 pts");
+    await expect(first.getByTestId("question-tag")).toHaveText(["genetics", "cell biology"]);
+
+    // Saved: still there after reopening from the library.
+    await page.reload();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
+    await expect(page.getByTestId("total-points")).toHaveText("5 pts");
+    await expect(cards.first().getByTestId("question-points")).toHaveText("3 pts");
+
+    // The score is weighted by points: missing the 3-point question leaves 2 of 5.
+    await page.getByRole("tab", { name: "Take test" }).click();
+    await cards.nth(0).getByRole("radio", { name: /Wrong answer/ }).first().click();
+    await cards.nth(1).getByRole("radio", { name: /Correct answer/ }).click();
+    await page.getByRole("button", { name: "Submit answers" }).click();
+    await expect(page.getByTestId("score-percentage")).toHaveText("40%");
+    await expect(page.getByTestId("score-points")).toHaveText("2 of 5 pts");
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();

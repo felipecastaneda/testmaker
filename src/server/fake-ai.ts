@@ -36,6 +36,7 @@ export function fakeGenerate(
         explanation: `The statement is taken directly from the material.${note}`,
         sourceQuote: sentence,
         difficulty: "easy",
+        tags: ["Cell Biology", "true or false"],
       });
     } else {
       out.push({
@@ -46,6 +47,7 @@ export function fakeGenerate(
         explanation: `Because the material says so.${note}`,
         sourceQuote: sentence,
         difficulty: "medium",
+        tags: ["Cell Biology", "#Organelles"],
       });
     }
   }
