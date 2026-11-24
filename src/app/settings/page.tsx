@@ -62,6 +62,13 @@ export default function SettingsPage() {
     }
   }, [callAction]);
 
+  // Settings change what the rest of the app shows (course defaults, allowed models,
+  // org names), so refresh the shared course data too, not just this page.
+  const { reload: reloadCourses } = useCourses();
+  const afterSave = useCallback(async () => {
+    await Promise.all([load(), reloadCourses()]);
+  }, [load, reloadCourses]);
+
   useEffect(() => {
     // Data fetching once access is confirmed; state updates happen after the await.
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -109,15 +116,15 @@ export default function SettingsPage() {
                     <Loader2 className="h-6 w-6 animate-spin text-primary" />
                   </div>
                 ) : tab === "profile" ? (
-                  <ProfileTab overview={overview} onSaved={load} />
+                  <ProfileTab overview={overview} onSaved={afterSave} />
                 ) : tab === "organization" ? (
-                  <OrganizationTab overview={overview} onSaved={load} />
+                  <OrganizationTab overview={overview} onSaved={afterSave} />
                 ) : tab === "members" ? (
-                  <MembersTab overview={overview} onSaved={load} />
+                  <MembersTab overview={overview} onSaved={afterSave} />
                 ) : tab === "platform" ? (
                   <PlatformTab />
                 ) : (
-                  <CoursesTab overview={overview} onSaved={load} />
+                  <CoursesTab overview={overview} onSaved={afterSave} />
                 )}
               </div>
             </>
@@ -294,7 +301,7 @@ function OrgForm({ org, onSaved }: { org: SettingsOverview["orgs"][number]; onSa
         <section key={group} className="space-y-4">
           <h2 className="text-lg font-semibold text-slate-800 border-b border-slate-100 pb-2">{GROUP_LABELS[group]}</h2>
           {groupKeys.map((k) => (
-            <div key={k} className="space-y-2">
+            <div key={k} className="space-y-2" data-testid={`org-setting-${k}`}>
               <SettingField settingKey={k} value={draft[k]} disabled={readOnly} onChange={(v) => setDraft({ ...draft, [k]: v })} />
               {SETTINGS[k].lockable && (
                 <label className="flex items-center gap-2 text-xs text-slate-600 ml-7 cursor-pointer">

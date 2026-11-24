@@ -246,6 +246,83 @@ test.describe.serial("TestMaker", () => {
     await expect(page.getByTestId("score-points")).toHaveText("2 of 5 pts");
   });
 
+  test("assignments: assign a test online, open/close, edit, snapshot, list, delete", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    // A course default pre-fills the time limit.
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Courses" }).click();
+    const limitSetting = page.getByTestId("course-setting-assignments.defaultTimeLimit");
+    await limitSetting.getByLabel("Use the organization's setting").uncheck();
+    await limitSetting.getByLabel("Default time limit (minutes)").fill("30");
+    await page.getByRole("button", { name: "Save course settings" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+
+    // Open the "Points Quiz" test (2 questions, 5 points) and assign it.
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign online" }).click();
+    const dialog = page.getByRole("dialog");
+    await expect(dialog.getByLabel("Title students see")).toHaveValue("Points Quiz");
+    await expect(dialog.getByLabel("Time limit in minutes (optional)")).toHaveValue("30");
+    await dialog.getByLabel("Title students see").fill("Quiz 1 online");
+    await dialog.getByRole("button", { name: "Create and open" }).click();
+
+    await expect(page).toHaveURL(/\/assignments\/[^/]+$/);
+    await expect(page.getByRole("heading", { name: "Quiz 1 online" })).toBeVisible();
+    await expect(page.getByTestId("availability")).toHaveText("Open");
+    await expect(page.getByText("2 questions · 5 pts", { exact: false })).toBeVisible();
+    await expect(page.getByText("30 minutes")).toBeVisible();
+    const code = (await page.getByTestId("join-code").textContent())!;
+    expect(code).toMatch(/^[A-HJ-NP-Z2-9]{8}$/);
+    await expect(page.getByLabel("Link", { exact: true })).toHaveValue(new RegExp(`/take/${code}$`));
+
+    // Close and reopen.
+    await page.getByRole("button", { name: "Close now" }).click();
+    await expect(page.getByTestId("availability")).toHaveText("Closed");
+    await page.getByRole("button", { name: "Open now" }).click();
+    await expect(page.getByTestId("availability")).toHaveText("Open");
+
+    // Edit: invalid window is refused, a valid change is saved.
+    await page.getByRole("button", { name: "Edit", exact: true }).click();
+    await page.getByLabel("Opens (optional)").fill("2030-01-02T10:00");
+    await page.getByLabel("Closes (optional)").fill("2030-01-01T10:00");
+    await expect(page.getByRole("alert").filter({ hasText: "The closing time must be after the opening time." })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Save changes" })).toBeDisabled();
+    await page.getByLabel("Opens (optional)").fill("");
+    await page.getByLabel("Closes (optional)").fill("");
+    await page.getByLabel("Title students see").fill("Quiz 1 (edited)");
+    await page.getByRole("button", { name: "Save changes" }).click();
+    await expect(page.getByRole("heading", { name: "Quiz 1 (edited)" })).toBeVisible();
+    const assignmentUrl = page.url();
+
+    // The assignment is a snapshot: deleting a question from the test doesn't change it.
+    await page.goto("/");
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
+    page.once("dialog", (d) => d.accept());
+    await page.getByTestId("question-card").first().getByRole("button", { name: "Delete question" }).click();
+    await expect(page.getByTestId("question-card")).toHaveCount(1);
+    await page.goto(assignmentUrl);
+    await expect(page.getByText("2 questions · 5 pts", { exact: false })).toBeVisible();
+
+    // The list shows it; a draft can be saved too; deleting removes it.
+    await page.getByRole("link", { name: "Assignments", exact: true }).click();
+    await expect(page.getByTestId("assignment-item").filter({ hasText: "Quiz 1 (edited)" })).toBeVisible();
+    await page.goto("/");
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign online" }).click();
+    await page.getByRole("dialog").getByRole("button", { name: "Save as draft" }).click();
+    await expect(page.getByTestId("availability")).toHaveText("Draft");
+    await expect(page.getByText("1 questions", { exact: false })).toBeVisible();
+
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+    await expect(page).toHaveURL(/\/assignments$/);
+    await expect(page.getByTestId("assignment-item")).toHaveCount(1);
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();
@@ -308,7 +385,7 @@ test.describe.serial("TestMaker", () => {
     await page.getByLabel("Name").fill("Teacher Workspace");
     await page.getByRole("checkbox", { name: "Gemini 3.6" }).uncheck();
     await page.getByLabel("Organization instructions for the AI").fill("Write in Spanish.");
-    await page.getByLabel("Lock for all courses").check();
+    await page.getByTestId("org-setting-assistants.canEdit").getByLabel("Lock for all courses").check();
     await page.getByRole("button", { name: "Save organization settings" }).click();
     await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { GraduationCap, Zap, Cpu, Check, LogOut, Settings, type LucideIcon } from "lucide-react";
+import { ClipboardList, GraduationCap, Zap, Cpu, Check, LogOut, Settings, type LucideIcon } from "lucide-react";
 import { AVAILABLE_MODELS } from "@/ai/models";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { useCourses } from "@/hooks/use-courses";
@@ -105,6 +105,13 @@ export function Navbar({ selectedModels = [], onModelsChange, onHome }: NavbarPr
                 </span>
               )}
             </div>
+            {account && (
+              <Button asChild variant="ghost" size="icon" className="text-slate-500">
+                <Link href="/assignments" aria-label="Assignments" title="Assignments">
+                  <ClipboardList className="h-4 w-4" />
+                </Link>
+              </Button>
+            )}
             {account && (
               <Button asChild variant="ghost" size="icon" className="text-slate-500">
                 <Link href="/settings" aria-label="Settings" title="Settings">

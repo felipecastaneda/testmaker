@@ -36,6 +36,7 @@ export interface TestSummary {
 
 export interface StoredTest {
   id: string;
+  courseId: string;
   name: string;
   version: number;
   generatedAt: string;
@@ -51,6 +52,7 @@ export interface TestVersionSummary {
 
 export interface SaveTestOutcome {
   id: string;
+  courseId: string;
   name: string;
   version: number;
   mode: "created" | "appended" | "version_bumped" | "recreated";
@@ -93,6 +95,12 @@ export interface CourseSummary {
   isDefault: boolean;
   canEdit: boolean;
   canManage: boolean;
+  /** Effective defaults for assigning a test online in this course. */
+  assignmentDefaults: {
+    timeLimitMinutes: number | null;
+    resultsRelease: ResultsRelease;
+    showCorrectAnswers: boolean;
+  };
   /** Effective generation settings for this course. */
   generation: {
     allowedModels: string[];
@@ -148,4 +156,45 @@ export interface CourseStaffView {
   staff: { uid: string; email: string; role: CourseRole }[];
   /** Organization members not on the staff yet. */
   candidates: { uid: string; email: string }[];
+}
+
+// ---------------------------------------------------------------------------
+// Assignments (online exams)
+// ---------------------------------------------------------------------------
+
+/** Set by the professor. Whether students can actually start also depends on the window. */
+export type AssignmentStatus = "draft" | "open" | "closed";
+/** What students can do right now: status combined with opensAt/closesAt. */
+export type AssignmentAvailability = "draft" | "scheduled" | "open" | "closed";
+export type ResultsRelease = "immediately" | "after_close" | "manual";
+
+export interface AssignmentOptions {
+  title: string;
+  /** ISO times; null = no automatic opening/closing. */
+  opensAt: string | null;
+  closesAt: string | null;
+  /** Minutes per attempt; null = no limit (the window still applies). */
+  timeLimitMinutes: number | null;
+  shuffleQuestions: boolean;
+  resultsRelease: ResultsRelease;
+  /** With results, also show correct answers and explanations. */
+  showCorrectAnswers: boolean;
+}
+
+export interface AssignmentSummary extends AssignmentOptions {
+  id: string;
+  orgId: string;
+  courseId: string;
+  testId: string;
+  testVersion: number;
+  status: AssignmentStatus;
+  availability: AssignmentAvailability;
+  joinCode: string;
+  questionCount: number;
+  totalPoints: number;
+  stats: { started: number; submitted: number };
+  resultsReleased: boolean;
+  createdAt: string;
+  updatedAt: string;
+  canEdit: boolean;
 }

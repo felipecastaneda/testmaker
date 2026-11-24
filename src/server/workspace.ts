@@ -187,6 +187,26 @@ export async function requireCourseAccess(
   return { courseId, orgId, archived: snap.get("archived") === true };
 }
 
+/** Everything the user may do in a course, or null when they can't even view it. */
+export async function getCourseAccess(
+  user: AuthedUser,
+  courseId: unknown
+): Promise<{ courseId: string; orgId: string; access: Record<CourseAccessNeed, boolean> } | null> {
+  if (typeof courseId !== "string" || !courseId || courseId.includes("/")) return null;
+  const snap = await adminDb().collection(COURSES).doc(courseId).get();
+  if (!snap.exists) return null;
+  const orgId: string = snap.get("orgId");
+  const orgRole = await getOrgRole(orgId, user.uid);
+  const courseRole = courseRoleOf(snap.data(), user.uid);
+  const needsSettings = courseRole === "assistant" && !isOrgAdmin(orgRole);
+  const access = courseAccess({
+    orgRole,
+    courseRole,
+    assistantsCanEdit: needsSettings ? assistantsCanEdit(await getOrgDoc(orgId), snap.data()) : false,
+  });
+  return access.view ? { courseId, orgId, access } : null;
+}
+
 export interface ViewableCourse {
   doc: DocumentSnapshot;
   orgRole: OrgRole;
