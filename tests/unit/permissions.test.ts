@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canCreateCourses, courseAccess, isOrgAdmin } from "@/lib/permissions";
+import { assignableRoles, canChangeMember, canCreateCourses, courseAccess, isOrgAdmin } from "@/lib/permissions";
 import type { CourseRole, OrgRole } from "@/lib/types";
 
 const all = { view: true, edit: true, manage: true };
@@ -49,5 +49,33 @@ describe("canCreateCourses", () => {
     expect(canCreateCourses("instructor", false)).toBe(false);
     expect(canCreateCourses("assistant")).toBe(false);
     expect(canCreateCourses(null)).toBe(false);
+  });
+});
+
+describe("canChangeMember", () => {
+  it("lets owners do anything", () => {
+    expect(canChangeMember("owner", "owner", null)).toBe(true);
+    expect(canChangeMember("owner", null, "owner")).toBe(true);
+  });
+
+  it("stops admins from creating, changing or removing owners", () => {
+    expect(canChangeMember("admin", null, "admin")).toBe(true);
+    expect(canChangeMember("admin", "instructor", "assistant")).toBe(true);
+    expect(canChangeMember("admin", "instructor", null)).toBe(true);
+    expect(canChangeMember("admin", null, "owner")).toBe(false);
+    expect(canChangeMember("admin", "owner", "admin")).toBe(false);
+    expect(canChangeMember("admin", "owner", null)).toBe(false);
+  });
+
+  it("gives instructors, assistants and non-members no say", () => {
+    for (const actor of ["instructor", "assistant", null] as const) {
+      expect(canChangeMember(actor, null, "assistant")).toBe(false);
+    }
+  });
+
+  it("lists assignable roles", () => {
+    expect(assignableRoles("owner")).toEqual(["owner", "admin", "instructor", "assistant"]);
+    expect(assignableRoles("admin")).toEqual(["admin", "instructor", "assistant"]);
+    expect(assignableRoles("instructor")).toEqual([]);
   });
 });

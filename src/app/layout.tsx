@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 import { AuthProvider } from "@/components/auth/AuthProvider";
+import { CoursesProvider } from "@/hooks/use-courses";
 
 const inter = Inter({ subsets: ["latin"], weight: ["400", "500", "600", "700", "800", "900"], variable: "--font-inter" });
 
@@ -20,8 +21,10 @@ export default function RootLayout({
     <html lang="en" className={inter.variable}>
       <body className="font-body antialiased bg-background text-foreground min-h-screen">
         <AuthProvider>
-          {children}
-          <Toaster />
+          <CoursesProvider>
+            {children}
+            <Toaster />
+          </CoursesProvider>
         </AuthProvider>
       </body>
     </html>

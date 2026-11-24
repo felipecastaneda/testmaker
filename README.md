@@ -29,6 +29,7 @@ GOOGLE_GENAI_API_KEY=...
 
 # Access control
 ALLOWED_EMAILS=you@example.com,colleague@example.com
+PLATFORM_ADMIN_EMAILS=you@example.com  # Settings → Platform; can create institutions
 LEGACY_OWNER_EMAIL=you@example.com   # receives tests created before accounts existed
 DAILY_QUESTION_LIMIT=300             # per user, optional
 ```
@@ -43,11 +44,22 @@ Credentials: run `gcloud auth application-default login` once.
   - their email is in `ALLOWED_EMAILS`
   - their email is in `_meta/platform.allowedEmails` in Firestore, or `_meta/platform.signupMode` is `"open"`
   - they are a member of an *institution* organization (i.e. someone invited them)
+  - their email is in `PLATFORM_ADMIN_EMAILS`
 - On first sign-in every user gets a **personal organization** with one course, "My tests".
   Tests belong to a course, and access to a test is decided by the course: organization
   owners and admins see every course in their organization; instructors and assistants see
   the courses they are staff on. Rules live in `src/lib/permissions.ts`.
 - Every server action verifies the Firebase ID token, the signup gate and course access.
+  The only exceptions are viewing and accepting an invite, which need just a verified
+  email (`withVerifiedUser`), because joining an institution is what grants access.
+- **Institutions** are created by platform admins (or anyone, once signup is `open`).
+  Owners and admins invite people from Settings → Members: the app shows a one-time link
+  (`/invite/<token>`) to send yourself. It works only for the invited email, once, for
+  14 days; Firestore stores only a hash of the token. Admins can't create, change or
+  remove owners, and an organization always keeps at least one owner. Course staff
+  (instructors, assistants) are managed in Settings → Courses.
+- With several organizations, the navbar's organization switcher picks which one the
+  library and generate form show; the choice is remembered.
 - Each user can generate at most `DAILY_QUESTION_LIMIT` questions per day (UTC). Failed
   generations are refunded.
 - Firestore and Storage security rules deny all browser access; only the server reads data.
@@ -57,6 +69,7 @@ In production the allow-list lives in App Hosting secrets (the repo is public):
 ```bash
 firebase apphosting:secrets:set allowed_emails        # comma-separated emails
 firebase apphosting:secrets:set legacy_owner_email
+firebase apphosting:secrets:set platform_admin_emails  # comma-separated emails
 ```
 
 Changing a secret takes effect on the next rollout (push to `main`, or
@@ -132,6 +145,7 @@ tests/{testId}                               ownerId, orgId, courseId, name, nam
 tests/{testId}/questions/{questionId}        question fields + position
 tests/{testId}/versions/v{n}                 archived version metadata
 tests/{testId}/versions/v{n}/questions/{id}  archived questions
+invites/{sha256(token)}                      orgId, email, role, expiresAt, acceptedAt?, revokedAt?
 usage/{uid}_{yyyy-mm-dd}                     daily question count
 _meta/platform                               signupMode, allowedEmails
 ```

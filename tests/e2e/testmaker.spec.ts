@@ -1,4 +1,4 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test, type Browser, type Page } from "@playwright/test";
 import { readFile } from "node:fs/promises";
 import { E2E } from "../../playwright.config";
 import { getUid, readDoc, resetEmulators, seedLegacyTest, unauthenticatedRead, verifyEmail, writeDoc } from "./emulators";
@@ -18,6 +18,23 @@ const STUDY_TEXT = [
 
 async function signUp(page: Page, email: string) {
   await page.goto("/");
+  await page.getByRole("button", { name: "New here? Create an account" }).click();
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(E2E.password);
+  await page.getByRole("button", { name: "Create account" }).click();
+  await expect(page.getByRole("heading", { name: "Verify your email" })).toBeVisible();
+  await verifyEmail(email);
+  await page.getByRole("button", { name: "I've verified my email" }).click();
+}
+
+/** A separate browser session, for a second person. */
+async function otherPerson(browser: Browser): Promise<Page> {
+  const context = await browser.newContext();
+  return context.newPage();
+}
+
+/** Create an account and verify it on whatever page is open (e.g. an invite link). */
+async function signUpHere(page: Page, email: string) {
   await page.getByRole("button", { name: "New here? Create an account" }).click();
   await page.getByLabel("Email").fill(email);
   await page.getByLabel("Password").fill(E2E.password);
@@ -254,6 +271,121 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("button", { name: "Create New Test" }).click();
     await expect(page.getByText("None of your selected AI models are enabled here")).toBeVisible();
     await expect(page.getByRole("button", { name: "Generate Questions" })).toBeDisabled();
+  });
+
+  test("institutions: create, invite, accept, course staff, switch, roles and removal", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("link", { name: "Settings" }).click();
+
+    // The teacher is a platform admin, so they can create an institution.
+    await page.getByRole("tab", { name: "Organization" }).click();
+    await page.getByRole("button", { name: "New institution" }).click();
+    await page.getByLabel("Institution name").fill("E2E College");
+    await page.getByRole("button", { name: "Create institution" }).click();
+    await expect(page.getByText("Institution created", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Active organization").locator("option:checked")).toHaveText("E2E College");
+
+    // Invite a newcomer who isn't on any allow-list.
+    await page.getByRole("tab", { name: "Members" }).click();
+    await page.getByLabel("Email").fill(E2E.newcomer);
+    await page.getByLabel("Role", { exact: true }).selectOption("instructor");
+    await page.getByRole("button", { name: "Create invite link" }).click();
+    const link = await page.getByLabel("Invite link").inputValue();
+    expect(link).toMatch(/\/invite\/[A-Za-z0-9_-]{40,}$/);
+    await expect(page.getByRole("list", { name: "Pending invites" }).getByText(E2E.newcomer)).toBeVisible();
+
+    // The newcomer signs up from the link and accepts.
+    const newcomer = await otherPerson(browser);
+    await newcomer.goto(link);
+    await expect(newcomer.getByText("You've been invited to TestMaker.", { exact: false })).toBeVisible();
+    await signUpHere(newcomer, E2E.newcomer);
+    await expect(newcomer.getByRole("heading", { name: "Join E2E College" })).toBeVisible();
+    await newcomer.getByRole("button", { name: "Accept invite" }).click();
+    await expect(newcomer.getByRole("button", { name: "Create New Test" })).toBeVisible();
+    // No course yet, so nothing to save into.
+    await newcomer.getByRole("button", { name: "Create New Test" }).click();
+    await expect(newcomer.getByText("No course to save into")).toBeVisible();
+
+    // The link only works once.
+    await newcomer.goto(link);
+    await expect(newcomer.getByText("This invite has already been used.")).toBeVisible();
+
+    // The teacher creates a course in the institution and puts the newcomer on its staff.
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByRole("button", { name: "New course" }).click();
+    await page.getByLabel("Course name").fill("Chem 101");
+    await page.getByRole("button", { name: "Create course" }).click();
+    await expect(page.getByRole("region", { name: "Chem 101" })).toBeVisible();
+    // The library only shows the active organization: the personal "My tests" isn't here.
+    await expect(page.getByRole("region", { name: "My tests" })).toHaveCount(0);
+
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Courses" }).click();
+    await page.getByLabel("Course", { exact: true }).selectOption({ label: "Chem 101" });
+    await page.getByLabel("Add a member").selectOption({ label: E2E.newcomer });
+    await page.getByLabel("As", { exact: true }).selectOption("instructor");
+    await page.getByRole("button", { name: "Add to course" }).click();
+    await expect(page.getByText("Added to course", { exact: true })).toBeVisible();
+    await expect(page.getByRole("list", { name: "Course staff" }).getByText(E2E.newcomer)).toBeVisible();
+
+    await newcomer.goto("/");
+    await newcomer.getByRole("button", { name: "My Library" }).click();
+    await expect(newcomer.getByRole("region", { name: "Chem 101" })).toBeVisible();
+
+    // Switching organizations changes what the library shows, and is remembered.
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+    await page.getByLabel("Active organization").selectOption({ label: "Teacher Workspace" });
+    await page.getByRole("button", { name: "My Library" }).click();
+    await expect(page.getByRole("region", { name: "My tests" })).toBeVisible();
+    await expect(page.getByRole("region", { name: "Chem 101" })).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByLabel("Active organization").locator("option:checked")).toHaveText("Teacher Workspace");
+
+    // Change the newcomer's role, then remove them: they lose access entirely.
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Members" }).click();
+    await page.getByLabel(`Role for ${E2E.newcomer}`).selectOption("assistant");
+    await expect(page.getByText("Role updated", { exact: true })).toBeVisible();
+    page.once("dialog", (d) => d.accept());
+    await page.getByTestId("member-row").filter({ hasText: E2E.newcomer }).getByRole("button", { name: "Remove" }).click();
+    await expect(page.getByText("Member removed", { exact: true })).toBeVisible();
+    await newcomer.reload();
+    await expect(newcomer.getByRole("heading", { name: "No access" })).toBeVisible();
+
+    // An invite only works for the email it was sent to.
+    await page.getByLabel("Email").fill("someone-else@example.com");
+    await page.getByRole("button", { name: "Create invite link" }).click();
+    const otherLink = await page.getByLabel("Invite link").inputValue();
+    await newcomer.goto(otherLink);
+    await expect(newcomer.getByText("This invite is for someone-else@example.com", { exact: false })).toBeVisible();
+    await expect(newcomer.getByRole("button", { name: "Accept invite" })).toHaveCount(0);
+
+    // Revoked invites stop working.
+    await page.getByRole("button", { name: "Revoke invite for someone-else@example.com" }).click();
+    await expect(page.getByText("Invite revoked", { exact: true })).toBeVisible();
+    await newcomer.reload();
+    await expect(newcomer.getByText("This invite was cancelled.", { exact: false })).toBeVisible();
+    await newcomer.context().close();
+  });
+
+  test("platform admins manage the allow-list from Settings", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Platform" }).click();
+    await page.getByLabel("Allowed emails").fill(E2E.late);
+    await page.getByRole("button", { name: "Save platform settings" }).click();
+    await expect(page.getByText("Platform settings saved", { exact: true })).toBeVisible();
+
+    const late = await otherPerson(browser);
+    await late.goto("/");
+    await signUpHere(late, E2E.late);
+    await expect(late.getByRole("button", { name: "Create New Test" })).toBeVisible();
+    // Non-admins don't see the Platform tab.
+    await late.getByRole("link", { name: "Settings" }).click();
+    await expect(late.getByRole("tab", { name: "Profile" })).toBeVisible();
+    await expect(late.getByRole("tab", { name: "Platform" })).toHaveCount(0);
+    await late.context().close();
   });
 
   test("another allow-listed user gets a separate workspace", async ({ page }) => {

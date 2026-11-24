@@ -60,7 +60,7 @@ orgs/{orgId}/members/{uid}
   uid, email, role: "owner" | "admin" | "instructor" | "assistant"
   joinedAt, invitedBy
 
-orgs/{orgId}/invites/{inviteId}    // inviteId = random 32-byte token (base64url)
+invites/{sha256(token)}           // the token (random 32 bytes, base64url) only lives in the link
   email, role, createdBy, createdAt, expiresAt, acceptedAt?, acceptedBy?
 
 courses/{courseId}

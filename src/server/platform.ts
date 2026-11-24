@@ -36,3 +36,18 @@ export async function getPlatformConfig(): Promise<PlatformConfig> {
   if (useCache) cache = { value, expires: Date.now() + CACHE_MS };
   return value;
 }
+
+export async function updatePlatformConfig(change: { signupMode: SignupMode; allowedEmails: string[] }): Promise<void> {
+  await adminDb()
+    .collection("_meta")
+    .doc("platform")
+    .set(
+      {
+        signupMode: change.signupMode,
+        allowedEmails: [...new Set(change.allowedEmails.map((e) => e.trim().toLowerCase()).filter(Boolean))].sort(),
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  cache = undefined;
+}

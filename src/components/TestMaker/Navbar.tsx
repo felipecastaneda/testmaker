@@ -4,6 +4,7 @@ import Link from "next/link";
 import { GraduationCap, Zap, Cpu, Check, LogOut, Settings, type LucideIcon } from "lucide-react";
 import { AVAILABLE_MODELS } from "@/ai/models";
 import { useAuth } from "@/components/auth/AuthProvider";
+import { useCourses } from "@/hooks/use-courses";
 import { Button } from "@/components/ui/button";
 
 interface NavbarProps {
@@ -23,6 +24,7 @@ const FALLBACK_STYLE = { icon: Cpu, checked: "bg-primary border-primary", iconCo
 export function Navbar({ selectedModels = [], onModelsChange, onHome }: NavbarProps) {
   const { user, access, signOut } = useAuth();
   const account = access.status === "allowed" ? access.account : null;
+  const { overview, setActiveOrg } = useCourses();
 
   const toggleModel = (model: string) => {
     if (!onModelsChange) return;
@@ -50,6 +52,21 @@ export function Navbar({ selectedModels = [], onModelsChange, onHome }: NavbarPr
         )}
 
         <div className="flex items-center gap-2 sm:gap-4 min-w-0">
+        {account && overview && overview.orgs.length > 1 && (
+          <select
+            aria-label="Active organization"
+            title="Switch organization"
+            className="h-9 max-w-[160px] sm:max-w-[220px] px-2 rounded-lg border border-slate-200 bg-white text-xs font-semibold text-slate-700"
+            value={overview.activeOrgId}
+            onChange={(e) => void setActiveOrg(e.target.value)}
+          >
+            {overview.orgs.map((o) => (
+              <option key={o.id} value={o.id}>
+                {o.name}
+              </option>
+            ))}
+          </select>
+        )}
         {account && onModelsChange && (
         <div role="group" aria-label="AI models" className="flex p-1 bg-slate-100 rounded-xl gap-1 border border-slate-200">
           {AVAILABLE_MODELS.map((model) => {

@@ -36,3 +36,20 @@ export function canAccessCourse(input: CourseAccessInput, need: CourseAccessNeed
 export function canCreateCourses(role: OrgRole | null | undefined, instructorsCanCreate = true): boolean {
   return isOrgAdmin(role) || (role === "instructor" && instructorsCanCreate);
 }
+
+/**
+ * May `actor` give `target` (currently `current`, or null for a new member) the role
+ * `next` (or remove them, when `next` is null)? Owners can do anything; admins can't
+ * create, change or remove owners; everyone else manages no one.
+ * Keeping at least one owner is checked separately, since it needs the member count.
+ */
+export function canChangeMember(actor: OrgRole | null, current: OrgRole | null, next: OrgRole | null): boolean {
+  if (actor === "owner") return true;
+  if (actor !== "admin") return false;
+  return current !== "owner" && next !== "owner";
+}
+
+/** Roles `actor` may hand out in an invite or role change. */
+export function assignableRoles(actor: OrgRole | null): OrgRole[] {
+  return ORG_ROLES.filter((r) => canChangeMember(actor, null, r));
+}

@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
+import { getActiveOrgId } from "./members-repo";
 import { countTestsInCourse } from "./tests-repo";
 import {
   defaultCourseId,
@@ -94,7 +95,7 @@ export async function getCoursesOverview(user: AuthedUser): Promise<CoursesOverv
         Number(b.isDefault) - Number(a.isDefault) ||
         a.name.localeCompare(b.name)
     );
-  return { orgs, courses: summaries };
+  return { orgs, courses: summaries, activeOrgId: await getActiveOrgId(user.uid, memberships) };
 }
 
 export async function createCourse(user: AuthedUser, orgId: string, input: CourseInput): Promise<CourseSummary> {

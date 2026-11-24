@@ -83,9 +83,9 @@ export function FileUploader({ onContentReady, selectedModels }: FileUploaderPro
   const [pickedDifficulty, setDifficulty] = useState<DifficultySetting | null>(null);
   const [questionTypes, setQuestionTypes] = useState<QuestionType[]>(["multiple_choice"]);
   const { callAction } = useAuth();
-  const { overview } = useCourses();
-  // Courses the user can save into; the default course sorts first.
-  const saveTargets = overview?.courses.filter((c) => c.canEdit && !c.archived) ?? [];
+  const { overview, activeCourses } = useCourses();
+  // Courses in the active organization the user can save into; the default course sorts first.
+  const saveTargets = activeCourses.filter((c) => c.canEdit && !c.archived);
   const courseId = pickedCourseId ?? saveTargets[0]?.id;
   const orgName = (orgId: string) => overview?.orgs.find((o) => o.id === orgId)?.name;
   const multipleOrgs = new Set(saveTargets.map((c) => c.orgId)).size > 1;
@@ -165,8 +165,10 @@ export function FileUploader({ onContentReady, selectedModels }: FileUploaderPro
   const trimmedContent = content.trim();
   const missingTarget = targetsExistingTest && !testName;
   const tooLong = trimmedContent.length > MAX_DOCUMENT_CHARS;
+  // Never fall back to another organization's course behind the user's back.
+  const noSaveTarget = !!overview && saveTargets.length === 0;
   const canGenerate =
-    trimmedContent.length >= MIN_CONTENT_LENGTH && !tooLong && !missingTarget && !isParsing && models.length > 0;
+    trimmedContent.length >= MIN_CONTENT_LENGTH && !tooLong && !missingTarget && !isParsing && models.length > 0 && !noSaveTarget;
 
   const submit = () => {
     if (!canGenerate) return;
@@ -372,6 +374,17 @@ export function FileUploader({ onContentReady, selectedModels }: FileUploaderPro
             </p>
           )}
         </div>
+
+        {noSaveTarget && (
+          <Alert variant="default" className="bg-amber-50 border-amber-200">
+            <AlertCircle className="h-4 w-4 text-amber-600" />
+            <AlertTitle className="text-amber-800">No course to save into</AlertTitle>
+            <AlertDescription className="text-amber-700">
+              You can&apos;t add tests to any course in {orgName(overview.activeOrgId) ?? "this organization"} yet. Create a course in
+              the library, ask to be added to one, or switch organization in the top bar.
+            </AlertDescription>
+          </Alert>
+        )}
 
         {skippedModels.length > 0 && (
           <Alert variant="default" className="bg-amber-50 border-amber-200">

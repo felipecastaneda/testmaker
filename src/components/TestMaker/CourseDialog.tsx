@@ -24,7 +24,8 @@ interface CourseDialogProps {
 export function CourseDialog({ open, onOpenChange, overview, course, onSaved }: CourseDialogProps) {
   const { callAction } = useAuth();
   const creatableOrgs = overview.orgs.filter((o) => o.canCreateCourses);
-  const [orgId, setOrgId] = useState(course?.orgId ?? creatableOrgs[0]?.id ?? "");
+  const preferred = creatableOrgs.find((o) => o.id === overview.activeOrgId) ?? creatableOrgs[0];
+  const [orgId, setOrgId] = useState(course?.orgId ?? preferred?.id ?? "");
   const [name, setName] = useState(course?.name ?? "");
   const [code, setCode] = useState(course?.code ?? "");
   const [term, setTerm] = useState(course?.term ?? "");

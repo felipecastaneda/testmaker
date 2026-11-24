@@ -33,6 +33,8 @@ env:
     secret: allowed_emails
   - variable: LEGACY_OWNER_EMAIL
     secret: legacy_owner_email
+  - variable: PLATFORM_ADMIN_EMAILS
+    secret: platform_admin_emails
   - variable: DAILY_QUESTION_LIMIT
     value: "300"
     availability: [ "RUNTIME" ]
