@@ -95,8 +95,12 @@ production data or spends API credits. First run: `npx playwright install chromi
 
 ## How it works
 
-- **Upload**: `.txt`, `.md`, `.csv`, `.docx` and `.xlsx` are parsed in the browser
-  (`src/lib/document-parser.ts`), or paste text directly (max 400k characters).
+- **Upload**: PDF, `.pptx`, `.docx`, `.xlsx`, `.txt`, `.md` and `.csv` are parsed in the
+  browser (`src/lib/document-parser.ts`), or paste text directly (max 400k characters).
+  PowerPoint slides are read in presentation order with their speaker notes and marked
+  `--- Slide N ---`; PDFs are read with pdf.js (loaded only when a PDF is picked) and
+  marked `--- Page N ---`. Scanned PDFs (images, no text) get a clear message: text
+  recognition isn't supported yet.
 - **Generate**:
   - The document is split into ~40k-character chunks.
   - Questions are spread across chunks by length and across the selected models.

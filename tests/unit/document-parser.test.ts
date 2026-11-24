@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { extractTextFromFile } from "@/lib/document-parser";
 import { createZip } from "@/lib/zip-writer";
 import { installXmlDom } from "./setup-dom";
+import { makePdf, makePptx } from "../fixtures/make-docs";
 
 beforeAll(installXmlDom);
 
@@ -74,5 +75,55 @@ describe("extractTextFromFile", () => {
 
   it("rejects unknown extensions", async () => {
     await expect(extractTextFromFile(new File(["x"], "image.png"))).rejects.toThrow(/Unsupported file type/);
+  });
+});
+
+describe("PowerPoint and PDF", () => {
+  const file = (bytes: Uint8Array, name: string) => new File([bytes as BlobPart], name);
+
+  it("reads slides in presentation order, with their speaker notes", async () => {
+    const deck = await makePptx(
+      [
+        { lines: ["Cell Biology", "An introduction"] },
+        { lines: ["Mitochondria", "Produce ATP & energy"], notes: ["Mention cellular respiration."] },
+        { lines: ["Ribosomes build proteins"] },
+      ],
+      [0, 2, 1] // shown as: intro, ribosomes, mitochondria
+    );
+    const text = await extractTextFromFile(file(deck, "lecture.pptx"));
+    expect(text).toBe(
+      [
+        "--- Slide 1 ---\nCell Biology\nAn introduction",
+        "--- Slide 2 ---\nRibosomes build proteins",
+        "--- Slide 3 ---\nMitochondria\nProduce ATP & energy\nSpeaker notes:\nMention cellular respiration.",
+      ].join("\n\n")
+    );
+    // The notes slide number placeholder ("2") isn't mistaken for notes.
+    expect(text).not.toMatch(/notes:\n[\s\S]*\n2$/);
+  });
+
+  it("rejects legacy .ppt files with a helpful message", async () => {
+    await expect(extractTextFromFile(new File(["x"], "old.ppt"))).rejects.toThrow(/Re-save the file as \.pptx/);
+  });
+
+  it("reads PDF text page by page", async () => {
+    const pdf = makePdf([
+      ["Photosynthesis happens in the chloroplasts of plant cells.", "Light energy becomes chemical energy."],
+      [],
+      ["The Calvin cycle (light-independent) fixes carbon dioxide into sugars."],
+    ]);
+    const text = await extractTextFromFile(file(pdf, "notes.pdf"));
+    expect(text).toContain("--- Page 1 ---\nPhotosynthesis happens in the chloroplasts of plant cells.");
+    expect(text).toContain("Light energy becomes chemical energy.");
+    expect(text).toContain("--- Page 3 ---\nThe Calvin cycle (light-independent) fixes carbon dioxide into sugars.");
+    expect(text).not.toContain("--- Page 2 ---");
+  });
+
+  it("explains that scanned PDFs (no text) aren't supported yet", async () => {
+    await expect(extractTextFromFile(file(makePdf([[], []]), "scan.pdf"))).rejects.toThrow(/looks scanned/);
+  });
+
+  it("reports damaged PDFs", async () => {
+    await expect(extractTextFromFile(new File(["not a pdf at all"], "broken.pdf"))).rejects.toThrow(/Couldn't read this PDF/);
   });
 });

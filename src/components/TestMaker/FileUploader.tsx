@@ -407,7 +407,7 @@ export function FileUploader({ onContentReady, selectedModels }: FileUploaderPro
             </div>
             <div className="space-y-2">
               <p className="font-medium">{isParsing ? "Reading document..." : "Upload Document"}</p>
-              <p className="text-xs text-muted-foreground">Supports .txt, .md, .csv, .docx, .xlsx</p>
+              <p className="text-xs text-muted-foreground">Supports PDF, PowerPoint (.pptx), Word (.docx), Excel (.xlsx), .txt, .md, .csv</p>
             </div>
             <input
               type="file"

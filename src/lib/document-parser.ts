@@ -7,7 +7,7 @@
  */
 
 const TEXT_EXTENSIONS = ["txt", "md", "csv", "tsv", "json"];
-export const SUPPORTED_EXTENSIONS = [...TEXT_EXTENSIONS, "docx", "xlsx"];
+export const SUPPORTED_EXTENSIONS = [...TEXT_EXTENSIONS, "docx", "xlsx", "pptx", "pdf"];
 
 export function getExtension(fileName: string): string {
   const dot = fileName.lastIndexOf(".");
@@ -26,7 +26,13 @@ export async function extractTextFromFile(file: File): Promise<string> {
   if (ext === "xlsx") {
     return extractXlsxText(await file.arrayBuffer());
   }
-  if (ext === "doc" || ext === "xls") {
+  if (ext === "pptx") {
+    return extractPptxText(await file.arrayBuffer());
+  }
+  if (ext === "pdf") {
+    return extractPdfText(await file.arrayBuffer());
+  }
+  if (ext === "doc" || ext === "xls" || ext === "ppt") {
     throw new Error(
       `Legacy .${ext} files aren't supported. Re-save the file as .${ext}x and upload it again.`
     );
@@ -224,4 +230,173 @@ async function extractXlsxText(buffer: ArrayBuffer): Promise<string> {
   }
 
   return output.join("\n\n").trim();
+}
+
+// ---------------------------------------------------------------------------
+// PPTX
+// ---------------------------------------------------------------------------
+
+const DRAWINGML_NS = "http://schemas.openxmlformats.org/drawingml/2006/main";
+const RELATIONSHIPS_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
+
+/** Resolve a relationship target (relative to `fromPart`) to a path inside the archive. */
+function resolvePart(fromPart: string, target: string): string {
+  if (target.startsWith("/")) return target.slice(1);
+  const parts = fromPart.split("/").slice(0, -1);
+  for (const segment of target.split("/")) {
+    if (segment === "..") parts.pop();
+    else if (segment !== ".") parts.push(segment);
+  }
+  return parts.join("/");
+}
+
+/** Relationship id → { type, target part } for the part at `partPath`. */
+async function readRelationships(buffer: ArrayBuffer, entries: Map<string, ZipEntry>, partPath: string) {
+  const slash = partPath.lastIndexOf("/");
+  const relsPath = `${partPath.slice(0, slash)}/_rels/${partPath.slice(slash + 1)}.rels`;
+  const rels = await readXmlPart(buffer, entries, relsPath);
+  const out = new Map<string, { type: string; path: string }>();
+  for (const rel of rels ? byLocalName(rels, "Relationship") : []) {
+    out.set(rel.getAttribute("Id") ?? "", {
+      type: rel.getAttribute("Type") ?? "",
+      path: resolvePart(partPath, rel.getAttribute("Target") ?? ""),
+    });
+  }
+  return out;
+}
+
+/** Slide parts in presentation order (falling back to slide1, slide2, ... by number). */
+async function pptxSlidePaths(buffer: ArrayBuffer, entries: Map<string, ZipEntry>): Promise<string[]> {
+  const presentation = await readXmlPart(buffer, entries, "ppt/presentation.xml");
+  if (presentation) {
+    const rels = await readRelationships(buffer, entries, "ppt/presentation.xml");
+    const ordered = byLocalName(presentation, "sldId")
+      .map((s) => rels.get(s.getAttributeNS(RELATIONSHIPS_NS, "id") ?? s.getAttribute("r:id") ?? "")?.path)
+      .filter((path): path is string => !!path && entries.has(path));
+    if (ordered.length) return ordered;
+  }
+  const number = (p: string) => Number(/slide(\d+)\.xml$/.exec(p)?.[1] ?? 0);
+  return Array.from(entries.keys())
+    .filter((p) => /^ppt\/slides\/slide\d+\.xml$/.test(p))
+    .sort((a, b) => number(a) - number(b));
+}
+
+/** Text of the DrawingML paragraphs under `root`, one line per paragraph. */
+function drawingText(root: Element | Document): string {
+  return Array.from(root.getElementsByTagNameNS(DRAWINGML_NS, "p"))
+    .map((p) => {
+      let text = "";
+      for (const node of Array.from(p.getElementsByTagNameNS(DRAWINGML_NS, "*"))) {
+        if (node.localName === "t") text += node.textContent ?? "";
+        else if (node.localName === "br") text += "\n";
+      }
+      return text.trim();
+    })
+    .filter(Boolean)
+    .join("\n");
+}
+
+/** Speaker notes: the notes body only, not the slide-number or slide-image placeholders. */
+function notesText(notes: Document): string {
+  return byLocalName(notes, "sp")
+    .filter((shape) => {
+      const type = byLocalName(shape, "ph")[0]?.getAttribute("type");
+      return type === "body" || type === null || type === undefined;
+    })
+    .map((shape) => drawingText(shape))
+    .filter(Boolean)
+    .join("\n");
+}
+
+async function extractPptxText(buffer: ArrayBuffer): Promise<string> {
+  const entries = readZipDirectory(buffer);
+  const slides = await pptxSlidePaths(buffer, entries);
+  if (slides.length === 0) throw new Error("Couldn't find any slides in this .pptx file.");
+
+  const output: string[] = [];
+  for (const [i, path] of slides.entries()) {
+    const slide = await readXmlPart(buffer, entries, path);
+    if (!slide) continue;
+    const text = drawingText(slide);
+    const rels = await readRelationships(buffer, entries, path);
+    const notesRel = [...rels.values()].find((r) => r.type.endsWith("/notesSlide"));
+    const notesDoc = notesRel ? await readXmlPart(buffer, entries, notesRel.path) : null;
+    const notes = notesDoc ? notesText(notesDoc) : "";
+    if (!text && !notes) continue;
+    // Slide markers keep the AI's source quotes easy to find in the deck.
+    output.push([`--- Slide ${i + 1} ---`, text, notes && `Speaker notes:\n${notes}`].filter(Boolean).join("\n"));
+  }
+  return output.join("\n\n").trim();
+}
+
+// ---------------------------------------------------------------------------
+// PDF
+// ---------------------------------------------------------------------------
+
+/** Below this many non-space characters a PDF is treated as scanned images. */
+const MIN_PDF_TEXT = 100;
+
+/**
+ * Load pdf.js on demand. Its worker module is imported too and handed over through
+ * `globalThis.pdfjsWorker`, so pdf.js runs it on the main thread instead of fetching a
+ * separate worker file (which Next.js can't reliably bundle). Text extraction for
+ * documents of the sizes we accept is quick enough for that.
+ */
+async function loadPdfjs() {
+  const [pdfjs, worker] = await Promise.all([
+    import("pdfjs-dist/legacy/build/pdf.mjs"),
+    import("pdfjs-dist/legacy/build/pdf.worker.mjs"),
+  ]);
+  const g = globalThis as typeof globalThis & { pdfjsWorker?: unknown };
+  g.pdfjsWorker ??= worker;
+  return pdfjs;
+}
+
+export async function extractPdfText(data: ArrayBuffer): Promise<string> {
+  const pdfjs = await loadPdfjs();
+  let doc;
+  try {
+    doc = await pdfjs.getDocument({
+      data: new Uint8Array(data),
+      // We only need text: no XFA forms, no fonts loaded into the page. (pdf.js 5 never
+      // evaluates code from the PDF, so there's no isEvalSupported switch any more.)
+      enableXfa: false,
+      useSystemFonts: false,
+      disableFontFace: true,
+      // Font warnings only matter for drawing pages, which we never do.
+      verbosity: pdfjs.VerbosityLevel.ERRORS,
+    }).promise;
+  } catch (error) {
+    if ((error as { name?: string })?.name === "PasswordException") {
+      throw new Error("This PDF is password-protected. Remove the password and upload it again.");
+    }
+    throw new Error("Couldn't read this PDF. It may be damaged.");
+  }
+
+  try {
+    const pages: string[] = [];
+    for (let n = 1; n <= doc.numPages; n++) {
+      const page = await doc.getPage(n);
+      const content = await page.getTextContent();
+      let text = "";
+      for (const item of content.items) {
+        if (!("str" in item)) continue;
+        text += item.str;
+        if (item.hasEOL) text += "\n";
+      }
+      pages.push(text.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n").trim());
+      page.cleanup();
+    }
+    if (pages.join("").replace(/\s/g, "").length < MIN_PDF_TEXT) {
+      throw new Error(
+        "This PDF looks scanned (its pages are images), so there's no text to read. Text recognition isn't supported yet: use a PDF exported from Word or PowerPoint, or paste the text."
+      );
+    }
+    return pages
+      .map((text, i) => (text ? `--- Page ${i + 1} ---\n${text}` : ""))
+      .filter(Boolean)
+      .join("\n\n");
+  } finally {
+    await doc.destroy();
+  }
 }
