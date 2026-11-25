@@ -149,6 +149,16 @@ production data or spends API credits. First run: `npx playwright install chromi
   answers and explanations) according to the assignment's results policy. Student actions
   (`src/app/actions/take.ts`) never use Firebase Auth or the professor signup gate, and
   only ever touch the one assignment or attempt they name.
+- **Gradebook** (on each assignment page): one row per student with status, score, % and time,
+  and per question ✓/✗/– plus the % of students who got it right. Professors can:
+  - **regrade** a question (accept extra options, or give everyone full credit); all
+    submitted grades are recalculated and the change is logged on the assignment;
+  - give a student **extra time** (it outlasts the closing time, but not *Close now*);
+  - **reset** an attempt so the student can start again (switched device, or someone used
+    their ID);
+  - **release or hide results**;
+  - **export CSV** (UTF-8 with BOM for Excel; formula-like text is neutralised).
+  Opening the gradebook submits attempts whose time is up.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.

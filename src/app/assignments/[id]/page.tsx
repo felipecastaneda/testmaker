@@ -9,6 +9,7 @@ import { useAccessGate } from "@/components/auth/AccessGate";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { AssignmentForm, RESULTS_RELEASE_LABELS } from "@/components/assignments/AssignmentForm";
 import { AvailabilityBadge, formatWhen } from "@/components/assignments/AvailabilityBadge";
+import { Gradebook } from "@/components/assignments/Gradebook";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteAssignment, getAssignment, updateAssignment } from "@/app/actions/assignments";
@@ -204,16 +205,19 @@ export default function AssignmentPage() {
                 </section>
               )}
 
-              <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-2" aria-label="Students">
-                <h2 className="text-lg font-semibold text-slate-800">Students</h2>
-                <p className="text-sm text-slate-600" data-testid="assignment-stats">
-                  {a.stats.started} started · {a.stats.submitted} submitted
-                </p>
+              <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-3" aria-label="Students">
+                <div className="flex items-baseline justify-between gap-2">
+                  <h2 className="text-lg font-semibold text-slate-800">Grades</h2>
+                  <p className="text-xs text-slate-500" data-testid="assignment-stats">
+                    {a.stats.started} started · {a.stats.submitted} submitted
+                  </p>
+                </div>
                 {!a.canEdit && (
                   <p className="flex items-center gap-1.5 text-xs text-slate-500">
                     <Lock className="h-3 w-3" /> You can view this assignment but not change it.
                   </p>
                 )}
+                <Gradebook key={a.status} assignmentId={a.id} onAssignment={setAssignment} />
               </section>
             </>
           )}

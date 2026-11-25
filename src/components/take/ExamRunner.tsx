@@ -56,13 +56,25 @@ export function ExamRunner({ token, initial }: { token: string; initial: Student
     return () => clearInterval(timer);
   }, [inProgress, view.deadline, offset]);
 
-  // Time's up: submit whatever has been saved (the server would anyway).
+  // Time's up: check the server first (the professor may have given extra time), then
+  // submit whatever has been saved (the server would anyway).
   useEffect(() => {
-    if (inProgress && remaining !== null && remaining <= 0 && !autoSubmitted.current) {
-      autoSubmitted.current = true;
-      void submit();
-    }
-  }, [inProgress, remaining, submit]);
+    if (!inProgress || remaining === null || remaining > 0 || autoSubmitted.current) return;
+    autoSubmitted.current = true;
+    void (async () => {
+      const fresh = await getExam(token);
+      if (fresh.success && fresh.data) {
+        const serverNow = Date.parse(fresh.data.serverNow);
+        if (fresh.data.status === "in_progress" && fresh.data.deadline && Date.parse(fresh.data.deadline) > serverNow) {
+          setOffset(serverNow - Date.now());
+          setView(fresh.data);
+          autoSubmitted.current = false;
+          return;
+        }
+      }
+      await submit();
+    })();
+  }, [inProgress, remaining, submit, token]);
 
   const choose = async (questionId: string, option: string) => {
     if (!inProgress) return;

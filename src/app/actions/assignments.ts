@@ -5,6 +5,8 @@ import { MAX_TIME_LIMIT_MINUTES } from '@/lib/assignments';
 import type { ActionResult, AssignmentOptions, AssignmentStatus, AssignmentSummary } from '@/lib/types';
 import { UserFacingError, withUser } from '@/server/action-result';
 import * as repo from '@/server/assignments-repo';
+import * as gradebook from '@/server/gradebook-repo';
+import type { GradebookView } from '@/lib/gradebook';
 
 const Id = z.string().min(1).max(200).regex(/^[^/]+$/);
 const Time = z.string().datetime({ offset: true, message: 'Invalid date.' }).nullable();
@@ -53,4 +55,29 @@ export async function updateAssignment(
 
 export async function deleteAssignment(idToken: string, id: string): Promise<ActionResult> {
   return withUser(idToken, (user) => repo.deleteAssignment(user, parse(Id, id)));
+}
+
+// Gradebook ------------------------------------------------------------------
+
+export async function getGradebook(idToken: string, id: string): Promise<ActionResult<GradebookView>> {
+  return withUser(idToken, (user) => gradebook.getGradebook(user, parse(Id, id)));
+}
+
+export async function setResultsReleased(idToken: string, id: string, released: boolean): Promise<ActionResult> {
+  return withUser(idToken, (user) => gradebook.setResultsReleased(user, parse(Id, id), parse(z.boolean(), released)));
+}
+
+export async function resetAttempt(idToken: string, id: string, attemptId: string): Promise<ActionResult> {
+  return withUser(idToken, (user) => gradebook.resetAttempt(user, parse(Id, id), parse(Id, attemptId)));
+}
+
+/** Returns the student's new deadline. */
+export async function extendAttempt(idToken: string, id: string, attemptId: string, minutes: number): Promise<ActionResult<string>> {
+  return withUser(idToken, (user) => gradebook.extendAttempt(user, parse(Id, id), parse(Id, attemptId), parse(z.number(), minutes)));
+}
+
+export async function regradeQuestion(idToken: string, id: string, questionId: string, accepted: string[]): Promise<ActionResult> {
+  return withUser(idToken, (user) =>
+    gradebook.regradeQuestion(user, parse(Id, id), parse(Id, questionId), parse(z.array(z.string().max(2_000)).max(20), accepted))
+  );
 }

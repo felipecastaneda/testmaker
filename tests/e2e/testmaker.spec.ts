@@ -417,6 +417,110 @@ test.describe.serial("TestMaker", () => {
     for (const p of [ana, ben, carla, late]) await p.context().close();
   });
 
+  test("gradebook: scores, item %, regrade, extra time, release, CSV, reset", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign online" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Title students see").fill("Quiz C");
+    await dialog.getByLabel("Time limit in minutes (optional)").fill("30");
+    await dialog.getByLabel("Students see their results").selectOption({ label: "When I release them" });
+    await dialog.getByRole("button", { name: "Create and open" }).click();
+    await expect(page.getByRole("heading", { name: "Quiz C" })).toBeVisible();
+    const code = (await page.getByTestId("join-code").textContent())!;
+    const gradebookUrl = page.url();
+
+    const join = async (name: string, id: string) => {
+      const student = await otherPerson(browser);
+      await student.goto(`/take/${code}`);
+      await student.getByLabel("Full name").fill(name);
+      await student.getByLabel("Student ID").fill(id);
+      await student.getByRole("button", { name: "Start exam" }).click();
+      await expect(student.getByTestId("exam-question")).toHaveCount(3);
+      return student;
+    };
+
+    // Dana gets question 2 wrong; Eli is still working.
+    const dana = await join("Dana", "D-004");
+    const dq = dana.getByTestId("exam-question");
+    await dq.nth(0).getByRole("radio", { name: /Correct answer/ }).click();
+    const wrongOption = dq.nth(1).getByRole("radio", { name: /Wrong answer/ }).first();
+    const wrongText = (await wrongOption.textContent())!.replace(/^[A-Z]/, "").trim();
+    await wrongOption.click();
+    await dq.nth(2).getByRole("radio", { name: /Correct answer/ }).click();
+    await expect(dana.getByTestId("save-status")).toHaveText("All answers saved");
+    dana.once("dialog", (d) => d.accept());
+    await dana.getByRole("button", { name: "Submit answers" }).click();
+    await expect(dana.getByTestId("results-pending")).toContainText("professor will release");
+
+    const eli = await join("Eli", "E-005");
+    await eli.getByTestId("exam-question").first().getByRole("radio", { name: /Correct answer/ }).click();
+    await expect(eli.getByTestId("save-status")).toHaveText("All answers saved");
+
+    // The gradebook.
+    await page.reload();
+    const rows = page.getByTestId("gradebook-row");
+    await expect(rows).toHaveCount(2);
+    await expect(page.getByTestId("gradebook-summary")).toHaveText("1 submitted · 1 in progress · average 67%");
+    await expect(rows.filter({ hasText: "Dana" }).getByTestId("row-score")).toHaveText("4 / 6 pts (67%)");
+    await expect(rows.filter({ hasText: "Eli" })).toContainText("In progress");
+    await expect(page.getByTestId("q-stat-2")).toHaveText("0%");
+
+    // Regrade question 2 to also accept Dana's answer.
+    await page.getByRole("button", { name: /^Question 2: 0% correct, regrade$/ }).click();
+    await page.getByRole("dialog").getByRole("checkbox", { name: wrongText }).check();
+    await page.getByRole("button", { name: "Save and regrade" }).click();
+    await expect(page.getByText("Question regraded; grades updated", { exact: true })).toBeVisible();
+    await expect(rows.filter({ hasText: "Dana" }).getByTestId("row-score")).toHaveText("6 / 6 pts (100%)");
+    await expect(page.getByTestId("q-stat-2")).toHaveText("100%");
+
+    // Ten extra minutes for Eli; his own timer shows them.
+    page.once("dialog", (d) => d.accept("10"));
+    await page.getByRole("button", { name: "Extra time for Eli" }).click();
+    await expect(page.getByText("Eli has 10 more minutes", { exact: true })).toBeVisible();
+    await expect(rows.filter({ hasText: "Eli" })).toContainText("extra time until");
+    await eli.reload();
+    await expect(eli.getByTestId("time-remaining")).toHaveText(/^\s*(40:00|39:[0-5]\d)$/);
+
+    // Releasing results shows Dana her (regraded) score; hiding takes it back.
+    await page.getByRole("button", { name: "Release results" }).click();
+    await expect(page.getByText("Results released to students", { exact: true })).toBeVisible();
+    await dana.reload();
+    await expect(dana.getByTestId("student-score")).toHaveText("6 / 6 pts · 100%");
+    await page.getByRole("button", { name: "Hide results" }).click();
+    await expect(page.getByText("Results hidden from students", { exact: true })).toBeVisible();
+    await dana.reload();
+    await expect(dana.getByTestId("results-pending")).toBeVisible();
+
+    // CSV export.
+    const downloadPromise = page.waitForEvent("download");
+    await page.getByRole("button", { name: "Export CSV" }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe("Quiz_C_grades.csv");
+    const csv = await readFile((await download.path())!, "utf8");
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    expect(csv).toContain("Name,Student ID,Status,Started,Submitted,Minutes,Score,Possible,Percent,Q1,Q2,Q3");
+    expect(csv).toMatch(/\r\nDana,D-004,Submitted,[^,]+,[^,]+,\d+,6,6,100,2,2,2\r\n/);
+    expect(csv).toMatch(/\r\nEli,E-005,In progress,/);
+
+    // Reset Eli: his old session ends and he can start again with the same ID.
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Reset Eli" }).click();
+    await expect(page.getByText("Attempt reset", { exact: true })).toBeVisible();
+    await expect(rows).toHaveCount(1);
+    await eli.reload();
+    await expect(eli.getByLabel("Student ID")).toBeVisible();
+    await eli.getByLabel("Full name").fill("Eli");
+    await eli.getByLabel("Student ID").fill("E-005");
+    await eli.getByRole("button", { name: "Start exam" }).click();
+    await expect(eli.getByText("Eli · 0 of 3 answered")).toBeVisible();
+
+    await page.goto(gradebookUrl);
+    await expect(page.getByTestId("assignment-stats")).toHaveText("2 started · 1 submitted");
+    for (const p of [dana, eli]) await p.context().close();
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();
