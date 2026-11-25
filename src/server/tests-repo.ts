@@ -143,6 +143,7 @@ export async function loadTest(user: AuthedUser, testId: string): Promise<Stored
   const data = snap.data()!;
   return {
     id: ref.id,
+    courseId: data.courseId,
     name: data.name,
     version: data.version || 1,
     generatedAt: data.generatedAt,
@@ -219,7 +220,7 @@ export async function saveTest(
       questionCount: questions.length,
     });
     await writeQuestions(db, ref, questions);
-    return { id: ref.id, name, version: 1, mode: "created" };
+    return { id: ref.id, courseId, name, version: 1, mode: "created" };
   };
 
   if (!existing) {
@@ -237,7 +238,7 @@ export async function saveTest(
     await db.recursiveDelete(ref.collection(VERSIONS));
     await ref.update({ version: 1, generatedAt: now, updatedAt: now, questionCount: questions.length });
     await writeQuestions(db, ref, questions);
-    return { id: ref.id, name: existingName, version: 1, mode: "recreated" };
+    return { id: ref.id, courseId, name: existingName, version: 1, mode: "recreated" };
   }
 
   if (mode === "append") {
@@ -245,11 +246,11 @@ export async function saveTest(
     const start = last.empty ? 0 : (last.docs[0].get("position") as number) + 1;
     await writeQuestions(db, ref, questions, start);
     await ref.update({ questionCount: FieldValue.increment(questions.length), updatedAt: now });
-    return { id: ref.id, name: existingName, version: existing.get("version") ?? 1, mode: "appended" };
+    return { id: ref.id, courseId, name: existingName, version: existing.get("version") ?? 1, mode: "appended" };
   }
 
   const version = await replaceWithNewVersion(ref, questions, now);
-  return { id: ref.id, name: existingName, version, mode: "version_bumped" };
+  return { id: ref.id, courseId, name: existingName, version, mode: "version_bumped" };
 }
 
 export async function updateQuestion(user: AuthedUser, testId: string, question: QuestionData): Promise<void> {

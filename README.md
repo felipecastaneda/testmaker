@@ -134,6 +134,12 @@ production data or spends API credits. First run: `npx playwright install chromi
   no per-question mark, so set points in Moodle.
 - **Student view** (`src/lib/student-view.ts`): `toStudentQuestion()` strips the answer,
   explanation, quote, tags, difficulty and model. Anything sent to students must use it.
+- **Assignments (online exams)**: from a saved test choose *Assign online*. The assignment is a
+  frozen copy of the test's current questions (later edits don't change it), with an optional
+  window (opens/closes), time limit, question shuffling, and when students see results.
+  Each gets a join link and an 8-character code (no 0/O/1/I/L). Manage them under
+  *Assignments* in the navbar. Course/organization settings set the defaults. Students
+  take them at `/take/<code>` (coming in step 2, part 2).
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.
@@ -158,6 +164,9 @@ tests/{testId}/versions/v{n}                 archived version metadata
 tests/{testId}/versions/v{n}/questions/{id}  archived questions
 invites/{sha256(token)}                      orgId, email, role, expiresAt, acceptedAt?, revokedAt?
 usage/{uid}_{yyyy-mm-dd}                     daily question count
+assignments/{id}                             options, status, joinCode, testVersion, stats, ...
+assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
+joinCodes/{code}                             assignmentId
 _meta/platform                               signupMode, allowedEmails
 ```
 

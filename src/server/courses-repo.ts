@@ -54,6 +54,11 @@ function toSummary(
     isDefault: isDefaultCourse(id, data),
     canEdit: access.edit,
     canManage: access.manage,
+    assignmentDefaults: {
+      timeLimitMinutes: resolveSetting("assignments.defaultTimeLimit", orgSettings, courseSettings).value || null,
+      resultsRelease: resolveSetting("assignments.resultsRelease", orgSettings, courseSettings).value,
+      showCorrectAnswers: resolveSetting("assignments.showCorrectAnswers", orgSettings, courseSettings).value,
+    },
     generation: {
       allowedModels: resolveSetting("generation.allowedModels", orgSettings).value,
       defaultDifficulty: resolveSetting("generation.defaultDifficulty", orgSettings, courseSettings).value,
@@ -146,6 +151,13 @@ export async function deleteCourse(user: AuthedUser, courseId: string): Promise<
   const tests = await countTestsInCourse(courseId);
   if (tests > 0) {
     throw new UserFacingError(`This course still has ${tests} test${tests === 1 ? "" : "s"}. Move or delete them first.`);
+  }
+  // Assignments hold student attempts and grades; never orphan them.
+  const assignments = (await adminDb().collection("assignments").where("courseId", "==", courseId).count().get()).data().count;
+  if (assignments > 0) {
+    throw new UserFacingError(
+      `This course still has ${assignments} assignment${assignments === 1 ? "" : "s"} with student work. Delete them first.`
+    );
   }
   await ref.delete();
 }

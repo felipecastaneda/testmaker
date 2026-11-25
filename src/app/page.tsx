@@ -61,6 +61,7 @@ export default function Home() {
   const [testName, setTestName] = useState<string>("");
   const [testId, setTestId] = useState<string | null>(null);
   const [testVersion, setTestVersion] = useState<number | undefined>(undefined);
+  const [testCourseId, setTestCourseId] = useState<string | null>(null);
   const [reviewKey, setReviewKey] = useState(0);
   const [selectedModels, setSelectedModels] = useState<string[]>(AVAILABLE_MODELS.map((m) => m.id));
   const savedModels = auth.access.status === "allowed" ? auth.access.account.selectedModels : null;
@@ -84,11 +85,12 @@ export default function Home() {
 
   const heroImage = PlaceHolderImages.find((img) => img.id === "hero-illustration");
 
-  const showReview = (questions: QuestionData[], name: string, id: string | null, version?: number) => {
+  const showReview = (questions: QuestionData[], name: string, id: string | null, version?: number, courseId?: string) => {
     setGeneratedQuestions(questions);
     setTestName(name);
     setTestId(id);
     setTestVersion(version);
+    setTestCourseId(courseId ?? null);
     setReviewKey((k) => k + 1);
     setStep("review");
   };
@@ -96,7 +98,7 @@ export default function Home() {
   const reloadTest = async (id: string) => {
     const result = await callAction((token) => loadTest(token, id));
     if (result.success && result.data) {
-      showReview(result.data.questions, result.data.name, result.data.id, result.data.version);
+      showReview(result.data.questions, result.data.name, result.data.id, result.data.version, result.data.courseId);
     } else {
       toast({ title: "Couldn't reload the test", description: result.error, variant: "destructive" });
     }
@@ -123,6 +125,7 @@ export default function Home() {
     setTestId(outcome.id);
     setTestName(outcome.name);
     setTestVersion(outcome.version);
+    setTestCourseId(outcome.courseId);
   };
 
   const handleGenerate = async (request: GenerateRequest) => {
@@ -217,7 +220,7 @@ export default function Home() {
   };
 
   const handleLoadExisting = (test: StoredTest) => {
-    showReview(test.questions, test.name, test.id, test.version);
+    showReview(test.questions, test.name, test.id, test.version, test.courseId);
   };
 
   const confirmSave = async () => {
@@ -389,6 +392,7 @@ export default function Home() {
                 testId={testId}
                 testName={testName}
                 version={testVersion}
+                courseId={testCourseId}
                 onReload={() => testId && reloadTest(testId)}
               />
             )}

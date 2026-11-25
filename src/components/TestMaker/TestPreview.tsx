@@ -1,7 +1,8 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
-import { ArrowLeft, ClipboardCheck, FileDown, GraduationCap, History, PencilRuler, RefreshCw, Shuffle } from "lucide-react";
+import { ArrowLeft, ClipboardCheck, FileDown, GraduationCap, History, PencilRuler, RefreshCw, Send, Shuffle } from "lucide-react";
+import { AssignDialog } from "@/components/assignments/AssignDialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/components/auth/AuthProvider";
@@ -22,11 +23,14 @@ interface TestPreviewProps {
   testId?: string | null;
   testName?: string;
   version?: number;
+  /** The saved test's course (for assignment defaults). */
+  courseId?: string | null;
   /** Reload the test from the server (after restoring a version). */
   onReload?: () => void;
 }
 
-export function TestPreview({ questions, setQuestions, onReset, testId, testName, version, onReload }: TestPreviewProps) {
+export function TestPreview({ questions, setQuestions, onReset, testId, testName, version, courseId, onReload }: TestPreviewProps) {
+  const [assignOpen, setAssignOpen] = useState(false);
   const { callAction } = useAuth();
   const [mode, setMode] = useState<ViewMode>("author");
   const [answers, setAnswers] = useState<Record<string, string>>({});
@@ -164,6 +168,21 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
               <Button size="sm" onClick={() => setExportOpen(true)} disabled={questions.length === 0} className="rounded-full">
                 <FileDown className="h-4 w-4 mr-2" /> Export
               </Button>
+              {testId && (
+                <Button size="sm" onClick={() => setAssignOpen(true)} disabled={questions.length === 0} className="rounded-full bg-emerald-600 hover:bg-emerald-700">
+                  <Send className="h-4 w-4 mr-2" /> Assign online
+                </Button>
+              )}
+              {testId && assignOpen && (
+                <AssignDialog
+                  open
+                  onOpenChange={setAssignOpen}
+                  testId={testId}
+                  testName={testName ?? "Exam"}
+                  courseId={courseId ?? null}
+                  questionCount={questions.length}
+                />
+              )}
             </div>
           ) : (
             <Button variant="outline" size="sm" onClick={() => startAttempt("student")} className="rounded-full">

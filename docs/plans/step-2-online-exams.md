@@ -144,14 +144,14 @@ New settings (registry): `assignments.defaultTimeLimit`, `assignments.resultsRel
 
 ---
 
-## Delivery: PRs
+## Delivery: four parts (one PR each)
 
-| PR | Content |
+| Part | Content |
 |---|---|
-| 7 | Data model, `assign` from a test (snapshot), assignments list and page (link, code, open/close), settings defaults. No student side yet. |
-| 8 | Student side: `/take/[code]`, join with name + ID, attempt token, resume, autosave, time limit, submit, server grading. |
-| 9 | Results for students (per release policy), gradebook, CSV, item %, void attempt, regrade, accommodations (per-student extension). |
-| 10 | Hardening: join rate limits, focus-loss log, load test, `maxInstances`. |
+| 1 | Data model, `assign` from a test (snapshot), assignments list and page (link, code, open/close), settings defaults. No student side yet. |
+| 2 | Student side: `/take/[code]`, join with name + ID, attempt token, resume, autosave, time limit, submit, server grading. |
+| 3 | Results for students (per release policy), gradebook, CSV, item %, void attempt, regrade, accommodations (per-student extension). |
+| 4 | Hardening: join rate limits, focus-loss log, load test, `maxInstances`. |
 
 ---
 

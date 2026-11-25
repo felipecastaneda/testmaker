@@ -13,7 +13,7 @@ import { AVAILABLE_MODELS } from "@/ai/models";
  */
 
 export type SettingScope = "org" | "course";
-export type SettingGroup = "generation" | "questions" | "courses";
+export type SettingGroup = "generation" | "questions" | "assignments" | "courses";
 
 type Input =
   | { kind: "boolean" }
@@ -100,6 +100,43 @@ export const SETTINGS = {
     default: 1,
     input: { kind: "number", min: 0, max: 100, step: 0.5 },
   }),
+  "assignments.defaultTimeLimit": define<number>({
+    label: "Default time limit (minutes)",
+    help: "Pre-filled when you assign a test online. 0 means no time limit.",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: false,
+    schema: z.number().int("Use whole minutes.").min(0).max(600),
+    default: 0,
+    input: { kind: "number", min: 0, max: 600, step: 1 },
+  }),
+  "assignments.resultsRelease": define<"immediately" | "after_close" | "manual">({
+    label: "When students see their results",
+    help: "Pre-filled when you assign a test online.",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: true,
+    schema: z.enum(["immediately", "after_close", "manual"]),
+    default: "after_close",
+    input: {
+      kind: "select",
+      options: [
+        { value: "immediately", label: "Right after they submit" },
+        { value: "after_close", label: "When the assignment closes" },
+        { value: "manual", label: "When I release them" },
+      ],
+    },
+  }),
+  "assignments.showCorrectAnswers": define<boolean>({
+    label: "Show correct answers with results",
+    help: "Students also see the right answers and explanations, not just their score.",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: true,
+    schema: z.boolean(),
+    default: true,
+    input: { kind: "boolean" },
+  }),
   "courses.instructorsCanCreate": define<boolean>({
     label: "Instructors can create courses",
     help: "When off, only owners and admins can create courses.",
@@ -131,6 +168,7 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export const GROUP_LABELS: Record<SettingGroup, string> = {
   generation: "Question generation",
   questions: "Questions",
+  assignments: "Online exams",
   courses: "Courses and staff",
 };
 
