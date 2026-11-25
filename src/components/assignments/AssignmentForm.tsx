@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
-import { MAX_TIME_LIMIT_MINUTES, validateAssignmentOptions } from "@/lib/assignments";
+import { MAX_STUDENTS_LIMIT, MAX_TIME_LIMIT_MINUTES, validateAssignmentOptions } from "@/lib/assignments";
 import type { AssignmentOptions, ResultsRelease } from "@/lib/types";
 
 /** ISO time → value for <input type="datetime-local"> in the user's time zone. */
@@ -40,9 +40,11 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
   const [shuffleQuestions, setShuffle] = useState(initial.shuffleQuestions);
   const [resultsRelease, setRelease] = useState<ResultsRelease>(initial.resultsRelease);
   const [showCorrectAnswers, setShowCorrect] = useState(initial.showCorrectAnswers);
+  const [maxStudents, setMaxStudents] = useState(String(initial.maxStudents));
 
-  const emit = (next: Partial<{ title: string; opensAt: string; closesAt: string; limit: string; shuffleQuestions: boolean; resultsRelease: ResultsRelease; showCorrectAnswers: boolean }>) => {
-    const v = { title, opensAt, closesAt, limit, shuffleQuestions, resultsRelease, showCorrectAnswers, ...next };
+  const emit = (next: Partial<{ title: string; opensAt: string; closesAt: string; limit: string; shuffleQuestions: boolean; resultsRelease: ResultsRelease; showCorrectAnswers: boolean; maxStudents: string }>) => {
+    const v = { title, opensAt, closesAt, limit, shuffleQuestions, resultsRelease, showCorrectAnswers, maxStudents, ...next };
+    const max = Number(v.maxStudents);
     const options: AssignmentOptions = {
       title: v.title.trim(),
       opensAt: fromLocalInput(v.opensAt),
@@ -51,8 +53,13 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
       shuffleQuestions: v.shuffleQuestions,
       resultsRelease: v.resultsRelease,
       showCorrectAnswers: v.showCorrectAnswers,
+      maxStudents: max,
     };
-    const problem = !options.title ? "Please give the assignment a title." : validateAssignmentOptions(options);
+    const problem = !options.title
+      ? "Please give the assignment a title."
+      : !Number.isInteger(max) || max < 1 || max > MAX_STUDENTS_LIMIT
+        ? `Maximum students must be a whole number between 1 and ${MAX_STUDENTS_LIMIT}.`
+        : validateAssignmentOptions(options);
     onChange(problem ? null : options, problem);
   };
 
@@ -145,6 +152,26 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="assignment-max-students" className="text-sm font-medium">
+          Maximum students
+        </label>
+        <Input
+          id="assignment-max-students"
+          type="number"
+          min={1}
+          max={MAX_STUDENTS_LIMIT}
+          step={1}
+          className="sm:w-40"
+          value={maxStudents}
+          onChange={(e) => {
+            setMaxStudents(e.target.value);
+            emit({ maxStudents: e.target.value });
+          }}
+        />
+        <p className="text-xs text-muted-foreground">Set it a little above your class size, so made-up student IDs can&apos;t fill the exam.</p>
       </div>
 
       <label className="flex items-center gap-2 text-sm cursor-pointer">

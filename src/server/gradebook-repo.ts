@@ -23,7 +23,10 @@ export async function getGradebook(user: AuthedUser, id: string): Promise<Gradeb
   await finishExpiredAttempts(ref);
   const [snap, questions, attempts] = await Promise.all([ref.get(), readQuestions(ref), ref.collection(ATTEMPTS).get()]);
   return {
-    assignment: toSummary(snap.id, snap.data()!, canEdit),
+    assignment: toSummary(snap.id, snap.data()!, canEdit, {
+      started: attempts.size,
+      submitted: attempts.docs.filter((d) => d.get("submittedAt")).length,
+    }),
     questions: [...questions.values()].map((q) => ({
       id: q.id,
       question: q.question,
@@ -45,6 +48,7 @@ export async function getGradebook(user: AuthedUser, id: string): Promise<Gradeb
         extended: d.get("extended") === true,
         answers: d.get("answers") ?? {},
         grade: (d.get("grade") as AttemptGrade | undefined) ?? null,
+        focusLosses: d.get("focusLosses") ?? 0,
       })
     ),
   };
@@ -63,15 +67,8 @@ export async function setResultsReleased(user: AuthedUser, id: string, released:
 export async function resetAttempt(user: AuthedUser, id: string, attemptId: string): Promise<void> {
   const { ref } = await requireEditable(user, id);
   const attemptRef = ref.collection(ATTEMPTS).doc(attemptId);
-  await adminDb().runTransaction(async (tx) => {
-    const attempt = await tx.get(attemptRef);
-    if (!attempt.exists) throw new UserFacingError(ATTEMPT_NOT_FOUND);
-    tx.delete(attemptRef);
-    tx.update(ref, {
-      "stats.started": FieldValue.increment(-1),
-      ...(attempt.get("submittedAt") ? { "stats.submitted": FieldValue.increment(-1) } : {}),
-    });
-  });
+  if (!(await attemptRef.get()).exists) throw new UserFacingError(ATTEMPT_NOT_FOUND);
+  await attemptRef.delete();
 }
 
 /**

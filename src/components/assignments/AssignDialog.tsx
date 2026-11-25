@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { toast } from "@/hooks/use-toast";
 import { useCourses } from "@/hooks/use-courses";
+import { DEFAULT_MAX_STUDENTS } from "@/lib/assignments";
 import type { AssignmentOptions } from "@/lib/types";
 import { AssignmentForm } from "./AssignmentForm";
 
@@ -35,6 +36,7 @@ export function AssignDialog({ open, onOpenChange, testId, testName, courseId, q
     shuffleQuestions: false,
     resultsRelease: defaults?.resultsRelease ?? "after_close",
     showCorrectAnswers: defaults?.showCorrectAnswers ?? true,
+    maxStudents: DEFAULT_MAX_STUDENTS,
   };
   // Until the professor edits something, use the (possibly late-arriving) course defaults.
   const [edited, setEdited] = useState<{ options: AssignmentOptions | null; problem: string | null } | null>(null);

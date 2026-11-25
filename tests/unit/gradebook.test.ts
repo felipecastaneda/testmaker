@@ -28,6 +28,7 @@ function attempt(over: Partial<GradebookAttempt> & { answers: Record<string, str
     deadline: null,
     extended: false,
     grade: gradeAttempt(keys, over.answers),
+    focusLosses: 0,
     ...over,
   };
 }
@@ -35,7 +36,7 @@ function attempt(over: Partial<GradebookAttempt> & { answers: Record<string, str
 const attempts = [
   attempt({ studentName: "Zoë Álvarez", studentId: "Z1", answers: { q1: "Mitochondria", q2: "True" } }),
   attempt({ studentName: "Ana", studentId: "A1", answers: { q1: "Nucleus" }, submittedBy: "deadline" }),
-  attempt({ studentName: "Mid Way", studentId: "M1", answers: { q1: "Mitochondria" }, status: "in_progress", submittedAt: null, submittedBy: null, grade: null }),
+  attempt({ studentName: "Mid Way", studentId: "M1", answers: { q1: "Mitochondria" }, status: "in_progress", submittedAt: null, submittedBy: null, grade: null, focusLosses: 3 }),
 ];
 
 describe("questionStats", () => {
@@ -65,10 +66,10 @@ describe("gradebookCsv", () => {
   });
 
   it("has one row per student, sorted by name, with scores and per-question points", () => {
-    expect(lines[0]).toBe("Name,Student ID,Status,Started,Submitted,Minutes,Score,Possible,Percent,Q1,Q2");
-    expect(lines[1]).toBe("Ana,A1,Submitted (time/close),2026-12-01T10:00:00.000Z,2026-12-01T10:12:00.000Z,12,0,3,0,0,0");
-    expect(lines[2]).toBe("Mid Way,M1,In progress,2026-12-01T10:00:00.000Z,,,,,,,");
-    expect(lines[3]).toBe("Zoë Álvarez,Z1,Submitted,2026-12-01T10:00:00.000Z,2026-12-01T10:12:00.000Z,12,3,3,100,2,1");
+    expect(lines[0]).toBe("Name,Student ID,Status,Started,Submitted,Minutes,Score,Possible,Percent,Left page,Q1,Q2");
+    expect(lines[1]).toBe("Ana,A1,Submitted (time/close),2026-12-01T10:00:00.000Z,2026-12-01T10:12:00.000Z,12,0,3,0,0,0,0");
+    expect(lines[2]).toBe("Mid Way,M1,In progress,2026-12-01T10:00:00.000Z,,,,,,3,,");
+    expect(lines[3]).toBe("Zoë Álvarez,Z1,Submitted,2026-12-01T10:00:00.000Z,2026-12-01T10:12:00.000Z,12,3,3,100,0,2,1");
   });
 
   it("quotes commas and quotes, and neutralises spreadsheet formulas", () => {

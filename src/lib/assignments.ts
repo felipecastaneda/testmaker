@@ -68,3 +68,7 @@ export function attemptIsOver(
   if (attempt.extended === true) return false;
   return availabilityOf({ status: assignment.status, opensAt: assignment.opensAt ?? null, closesAt: assignment.closesAt ?? null }, new Date(now)) === "closed";
 }
+
+/** Student limit per assignment: an abuse guard against someone joining with made-up IDs. */
+export const DEFAULT_MAX_STUDENTS = 200;
+export const MAX_STUDENTS_LIMIT = 2_000;

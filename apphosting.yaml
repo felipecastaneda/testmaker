@@ -2,9 +2,9 @@
 # https://firebase.google.com/docs/app-hosting/configure
 
 runConfig:
-  # Increase this value if you'd like to automatically spin up
-  # more instances in response to increased traffic.
-  maxInstances: 1
+  # Up to 10 servers when a class takes an exam together; idle instances scale to zero, so
+  # this costs nothing extra when nobody is using it. Raise it for several large classes at once.
+  maxInstances: 10
 
 env:
   - variable: NEXT_PUBLIC_FIREBASE_API_KEY

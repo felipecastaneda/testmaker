@@ -27,6 +27,8 @@ export interface GradebookAttempt {
   extended: boolean;
   answers: Record<string, string>;
   grade: AttemptGrade | null;
+  /** Times the student left the exam page (informational). */
+  focusLosses: number;
 }
 
 export interface GradebookView {
@@ -104,6 +106,7 @@ export function gradebookCsv(view: GradebookView): string {
     "Score",
     "Possible",
     "Percent",
+    "Left page",
     ...view.questions.map((_, i) => `Q${i + 1}`),
   ];
   const rows = [...view.attempts]
@@ -120,6 +123,7 @@ export function gradebookCsv(view: GradebookView): string {
         g ? g.earned : null,
         g ? g.possible : null,
         g ? percentage(g.earned, g.possible) : null,
+        a.focusLosses,
         ...view.questions.map((q) => (g ? (g.perQuestion[q.id]?.points ?? 0) : null)),
       ];
     });
