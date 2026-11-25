@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { AlertCircle, Check, CheckCircle2, Clock, Loader2, X, XCircle } from "lucide-react";
-import { getExam, saveExamAnswer, submitExam } from "@/app/actions/take";
+import { getExam, recordFocusLoss, saveExamAnswer, submitExam } from "@/app/actions/take";
 import { Button } from "@/components/ui/button";
 import type { StudentExamView } from "@/lib/exam-types";
 import { formatPoints, optionLetter } from "@/lib/question-utils";
@@ -75,6 +75,16 @@ export function ExamRunner({ token, initial }: { token: string; initial: Student
       await submit();
     })();
   }, [inProgress, remaining, submit, token]);
+
+  // Tell the professor (as information only) each time the student leaves the exam page.
+  useEffect(() => {
+    if (!inProgress) return;
+    const onVisibility = () => {
+      if (document.visibilityState === "hidden") void recordFocusLoss(token);
+    };
+    document.addEventListener("visibilitychange", onVisibility);
+    return () => document.removeEventListener("visibilitychange", onVisibility);
+  }, [inProgress, token]);
 
   const choose = async (questionId: string, option: string) => {
     if (!inProgress) return;
@@ -177,6 +187,7 @@ export function ExamRunner({ token, initial }: { token: string; initial: Student
           {submitting ? <Loader2 className="h-4 w-4 animate-spin" /> : "Submit answers"}
         </Button>
         <p className="text-xs text-muted-foreground">Your answers are saved as you go. You can close this page and come back on this device.</p>
+        <p className="text-xs text-muted-foreground">Your professor can see how many times you left this page during the exam.</p>
       </div>
     </div>
   );

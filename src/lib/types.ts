@@ -179,6 +179,8 @@ export interface AssignmentOptions {
   resultsRelease: ResultsRelease;
   /** With results, also show correct answers and explanations. */
   showCorrectAnswers: boolean;
+  /** At most this many students can start (guards against joins with made-up IDs). */
+  maxStudents: number;
 }
 
 export interface AssignmentSummary extends AssignmentOptions {

@@ -500,8 +500,8 @@ test.describe.serial("TestMaker", () => {
     expect(download.suggestedFilename()).toBe("Quiz_C_grades.csv");
     const csv = await readFile((await download.path())!, "utf8");
     expect(csv.charCodeAt(0)).toBe(0xfeff);
-    expect(csv).toContain("Name,Student ID,Status,Started,Submitted,Minutes,Score,Possible,Percent,Q1,Q2,Q3");
-    expect(csv).toMatch(/\r\nDana,D-004,Submitted,[^,]+,[^,]+,\d+,6,6,100,2,2,2\r\n/);
+    expect(csv).toContain("Name,Student ID,Status,Started,Submitted,Minutes,Score,Possible,Percent,Left page,Q1,Q2,Q3");
+    expect(csv).toMatch(/\r\nDana,D-004,Submitted,[^,]+,[^,]+,\d+,6,6,100,\d+,2,2,2\r\n/);
     expect(csv).toMatch(/\r\nEli,E-005,In progress,/);
 
     // Reset Eli: his old session ends and he can start again with the same ID.
@@ -519,6 +519,55 @@ test.describe.serial("TestMaker", () => {
     await page.goto(gradebookUrl);
     await expect(page.getByTestId("assignment-stats")).toHaveText("2 started · 1 submitted");
     for (const p of [dana, eli]) await p.context().close();
+  });
+
+  test("exam guards: student limit, and leaving the page is logged", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign online" }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Title students see").fill("Quiz D");
+    await expect(dialog.getByLabel("Maximum students")).toHaveValue("200");
+    await dialog.getByLabel("Maximum students").fill("0");
+    await expect(dialog.getByRole("alert")).toContainText("Maximum students must be");
+    await dialog.getByLabel("Maximum students").fill("1");
+    await dialog.getByRole("button", { name: "Create and open" }).click();
+    await expect(page.getByRole("heading", { name: "Quiz D" })).toBeVisible();
+    const code = (await page.getByTestId("join-code").textContent())!;
+
+    const join = async (name: string, id: string) => {
+      const student = await otherPerson(browser);
+      await student.goto(`/take/${code}`);
+      await student.getByLabel("Full name").fill(name);
+      await student.getByLabel("Student ID").fill(id);
+      await student.getByRole("button", { name: "Start exam" }).click();
+      return student;
+    };
+
+    const fay = await join("Fay", "F-006");
+    await expect(fay.getByTestId("exam-question")).toHaveCount(3);
+    await expect(fay.getByText("Your professor can see how many times you left this page", { exact: false })).toBeVisible();
+
+    // The limit is 1, so a second student is refused.
+    const gus = await join("Gus", "G-007");
+    await expect(gus.getByRole("alert").filter({ hasText: "reached its student limit" })).toBeVisible();
+
+    // Fay switches away twice (simulated: headless pages never really lose visibility).
+    for (let i = 0; i < 2; i++) {
+      await fay.evaluate(() => {
+        Object.defineProperty(document, "visibilityState", { value: "hidden", configurable: true });
+        document.dispatchEvent(new Event("visibilitychange"));
+        Object.defineProperty(document, "visibilityState", { value: "visible", configurable: true });
+      });
+    }
+    await expect
+      .poll(async () => {
+        await page.reload();
+        return page.getByTestId("gradebook-row").filter({ hasText: "Fay" }).getByTestId("row-left-page").textContent();
+      })
+      .toBe("2×");
+    for (const p of [fay, gus]) await p.context().close();
   });
 
   test("courses: create, save into, move, archive and delete", async ({ page }) => {

@@ -1,18 +1,20 @@
 import "server-only";
 import { randomInt } from "node:crypto";
+import type { DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { loadTest } from "./tests-repo";
 import { getCourseAccess, listViewableCourses, requireCourseAccess } from "./workspace";
-import { availabilityOf, makeJoinCode, validateAssignmentOptions } from "@/lib/assignments";
+import { availabilityOf, DEFAULT_MAX_STUDENTS, makeJoinCode, validateAssignmentOptions } from "@/lib/assignments";
 import { totalPoints } from "@/lib/question-utils";
 import type { AssignmentOptions, AssignmentStatus, AssignmentSummary, QuestionData } from "@/lib/types";
 
 /*
  * Data model
  *   assignments/{id}                 options + { orgId, courseId, testId, testVersion, status, joinCode,
- *                                     questionCount, totalPoints, stats, resultsReleased, ... }
+ *                                     questionCount, totalPoints, maxStudents, resultsReleased, ... }
+ *   Started/submitted counts come from the attempts themselves (countAttempts), never a shared counter.
  *   assignments/{id}/questions/{qid} frozen copy of the test's questions (incl. the answer key) + position
  *   joinCodes/{code}                 { assignmentId } so students can find an assignment by its code
  *
@@ -25,7 +27,22 @@ const JOIN_CODES = "joinCodes";
 const NOT_FOUND = "Assignment not found.";
 const IN_LIMIT = 30;
 
-export function toSummary(id: string, d: FirebaseFirestore.DocumentData, canEdit: boolean): AssignmentSummary {
+/** Started/submitted counts, counted from the attempts (no shared counter that students write to). */
+export async function countAttempts(ref: DocumentReference): Promise<{ started: number; submitted: number }> {
+  const attempts = ref.collection("attempts");
+  const [started, submitted] = await Promise.all([
+    attempts.count().get(),
+    attempts.where("submittedAt", ">", "").count().get(),
+  ]);
+  return { started: started.data().count, submitted: submitted.data().count };
+}
+
+export function toSummary(
+  id: string,
+  d: FirebaseFirestore.DocumentData,
+  canEdit: boolean,
+  stats: { started: number; submitted: number }
+): AssignmentSummary {
   return {
     id,
     orgId: d.orgId,
@@ -44,7 +61,8 @@ export function toSummary(id: string, d: FirebaseFirestore.DocumentData, canEdit
     joinCode: d.joinCode,
     questionCount: d.questionCount ?? 0,
     totalPoints: d.totalPoints ?? 0,
-    stats: { started: d.stats?.started ?? 0, submitted: d.stats?.submitted ?? 0 },
+    stats,
+    maxStudents: d.maxStudents ?? DEFAULT_MAX_STUDENTS,
     resultsReleased: d.resultsReleased === true,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
@@ -111,7 +129,6 @@ export async function createAssignment(
       joinCode,
       questionCount: test.questions.length,
       totalPoints: totalPoints(test.questions),
-      stats: { started: 0, submitted: 0 },
       resultsReleased: false,
       createdBy: user.uid,
       createdAt: now,
@@ -139,15 +156,16 @@ export async function listAssignments(user: AuthedUser, courseId?: string): Prom
       adminDb().collection(ASSIGNMENTS).where("courseId", "in", ids.slice(i * IN_LIMIT, (i + 1) * IN_LIMIT)).get()
     )
   );
-  return snaps
-    .flatMap((s) => s.docs)
-    .map((d) => toSummary(d.id, d.data(), editable.get(d.get("courseId")) ?? false))
+  const docs = snaps.flatMap((s) => s.docs);
+  const counts = await Promise.all(docs.map((d) => countAttempts(d.ref)));
+  return docs
+    .map((d, i) => toSummary(d.id, d.data(), editable.get(d.get("courseId")) ?? false, counts[i]))
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
 }
 
 export async function getAssignment(user: AuthedUser, id: string): Promise<AssignmentSummary> {
   const { snap, canEdit } = await getAccessible(user, id);
-  return toSummary(snap.id, snap.data()!, canEdit);
+  return toSummary(snap.id, snap.data()!, canEdit, await countAttempts(snap.ref));
 }
 
 export async function updateAssignment(
@@ -165,7 +183,7 @@ export async function updateAssignment(
   checkOptions(merged);
   const update = { ...patch, updatedAt: new Date().toISOString() };
   await ref.update(update);
-  return toSummary(id, { ...current, ...update }, true);
+  return toSummary(id, { ...current, ...update }, true, await countAttempts(ref));
 }
 
 /** Deletes the assignment with all its questions and every student attempt. */

@@ -1,7 +1,7 @@
 'use server';
 
 import { z } from 'zod';
-import { MAX_TIME_LIMIT_MINUTES } from '@/lib/assignments';
+import { MAX_STUDENTS_LIMIT, MAX_TIME_LIMIT_MINUTES } from '@/lib/assignments';
 import type { ActionResult, AssignmentOptions, AssignmentStatus, AssignmentSummary } from '@/lib/types';
 import { UserFacingError, withUser } from '@/server/action-result';
 import * as repo from '@/server/assignments-repo';
@@ -18,6 +18,7 @@ const Options = z.object({
   shuffleQuestions: z.boolean(),
   resultsRelease: z.enum(['immediately', 'after_close', 'manual']),
   showCorrectAnswers: z.boolean(),
+  maxStudents: z.number().int().min(1, 'Allow at least 1 student.').max(MAX_STUDENTS_LIMIT, `At most ${MAX_STUDENTS_LIMIT} students.`),
 });
 const Patch = Options.partial().extend({ status: z.enum(['draft', 'open', 'closed']).optional() });
 

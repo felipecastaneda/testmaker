@@ -88,6 +88,7 @@ Changing a secret takes effect on the next rollout (push to `main`, or
 | `npm run genkit:dev` | Genkit developer UI for the AI flow |
 | `npx tsx test-models.ts` | Smoke-test each configured model with real API keys |
 | `npm run migrate:step1 -- --project=<id>` | Organizations migration (dry run; add `--apply`) |
+| `npm run loadtest:exam -- --students=N` | Simulate N students taking an exam at once (emulator only) |
 
 The end-to-end suite runs against a `demo-testmaker` emulator project with a deterministic
 fake LLM (`TESTMAKER_FAKE_AI=1`, ignored when `NODE_ENV=production`), so it never touches
@@ -159,6 +160,14 @@ production data or spends API credits. First run: `npx playwright install chromi
   - **release or hide results**;
   - **export CSV** (UTF-8 with BOM for Excel; formula-like text is neutralised).
   Opening the gradebook submits attempts whose time is up.
+- **Built for a whole class at once**: students only ever write to their own attempt
+  document (no shared counters; started/submitted counts are counted from the attempts), so
+  joins and submissions never queue on one document. `npm run loadtest:exam -- --students=300`
+  simulates a class against the Firestore emulator (300 and 1,000 students: 0 failures).
+  Guards: a per-assignment *maximum students* (default 200), generous per-IP rate limits on
+  student actions (per server instance, best-effort: schools often share one IP), and up to
+  10 App Hosting instances. Each time a student leaves the exam page is counted and shown in
+  the gradebook/CSV as *Left page*: information only, it can't prove or prevent cheating.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.

@@ -3,7 +3,7 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { FieldPath, FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import { UserFacingError } from "./errors";
-import { attemptIsOver, availabilityOf, isValidJoinCode, normalizeJoinCode } from "@/lib/assignments";
+import { attemptIsOver, availabilityOf, DEFAULT_MAX_STUDENTS, isValidJoinCode, normalizeJoinCode } from "@/lib/assignments";
 import type { JoinResult, PublicAssignmentInfo, StudentExamView } from "@/lib/exam-types";
 import { attemptDeadline, cleanName, gradeAttempt, studentKeyOf, studentResult, type AttemptGrade } from "@/lib/grading";
 import { orderOptions } from "@/lib/question-utils";
@@ -111,8 +111,8 @@ async function finish(ctx: AttemptContext, by: "student" | "deadline" | "teacher
     const fresh = await tx.get(ctx.attemptRef);
     if (fresh.get("submittedAt")) return;
     const grade = gradeAttempt(questions, fresh.get("answers") ?? {});
+    // Only the student's own document: a class submitting together never contends.
     tx.update(ctx.attemptRef, { submittedAt: new Date().toISOString(), submittedBy: by, grade, updatedAt: new Date().toISOString() });
-    tx.update(ctx.assignmentRef, { "stats.submitted": FieldValue.increment(1) });
   });
 }
 
@@ -202,17 +202,16 @@ export async function joinAssignment(code: string, rawName: string, rawStudentId
   const secret = randomBytes(32).toString("base64url");
   const startedAt = new Date();
 
-  await adminDb().runTransaction(async (tx) => {
-    const [existing, fresh] = await tx.getAll(attemptRef, assignmentRef);
-    if (existing.exists) {
-      throw new UserFacingError(
-        "An attempt with this student ID has already started. Continue on the device where you started, or ask your professor for help."
-      );
-    }
-    if ((fresh.get("stats.started") ?? 0) >= MAX_ATTEMPTS_PER_ASSIGNMENT) {
-      throw new UserFacingError("This exam isn't accepting more students. Ask your professor.");
-    }
-    tx.create(attemptRef, {
+  // The professor's student limit. A count, not a shared counter, so a whole class joining
+  // at once never queues on one document (approximate under a burst; it's an abuse guard).
+  const limit = Math.min(d.maxStudents ?? DEFAULT_MAX_STUDENTS, MAX_ATTEMPTS_PER_ASSIGNMENT);
+  if ((await assignmentRef.collection(ATTEMPTS).count().get()).data().count >= limit) {
+    throw new UserFacingError("This exam has reached its student limit. Ask your professor.");
+  }
+
+  try {
+    // create() fails if this student ID already has an attempt: one attempt per ID, no lock.
+    await attemptRef.create({
       tokenHash: sha256(secret),
       studentName,
       studentId,
@@ -225,8 +224,14 @@ export async function joinAssignment(code: string, rawName: string, rawStudentId
       userAgent: userAgent.slice(0, 200),
       updatedAt: startedAt.toISOString(),
     });
-    tx.update(assignmentRef, { "stats.started": FieldValue.increment(1) });
-  });
+  } catch (error) {
+    if ((error as { code?: number }).code === 6) {
+      throw new UserFacingError(
+        "An attempt with this student ID has already started. Continue on the device where you started, or ask your professor for help."
+      );
+    }
+    throw error;
+  }
 
   const token = `${snap.id}.${attemptRef.id}.${secret}`;
   return { token, view: await getExamView(token) };
@@ -257,4 +262,14 @@ export async function submitAttempt(token: string): Promise<StudentExamView> {
   const ctx = await loadAttempt(token);
   if (!ctx.attempt.submittedAt) await finish(ctx, isOver(ctx) ? "deadline" : "student");
   return getExamView(token);
+}
+
+/**
+ * Count a time the student left the exam page (switched tab/app, minimized). Shown to the
+ * professor as information only: it can't prove or prevent cheating.
+ */
+export async function recordFocusLoss(token: string): Promise<void> {
+  const ctx = await loadAttempt(token);
+  if (ctx.attempt.submittedAt) return;
+  await ctx.attemptRef.update({ focusLosses: FieldValue.increment(1), updatedAt: new Date().toISOString() });
 }

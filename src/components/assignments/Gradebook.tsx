@@ -146,6 +146,9 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                 <th className="text-left font-semibold px-3 py-2">Status</th>
                 <th className="text-right font-semibold px-3 py-2">Score</th>
                 <th className="text-right font-semibold px-3 py-2">Time</th>
+                <th className="text-right font-semibold px-3 py-2" title="Times the student left the exam page (switched tab or app). Information only.">
+                  Left page
+                </th>
                 {questions.map((q, i) => {
                   const s = stats[q.id];
                   return (
@@ -190,6 +193,9 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                     </td>
                     <td className="px-3 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">
                       {minutesTaken(attempt) !== null ? `${minutesTaken(attempt)} min` : ""}
+                    </td>
+                    <td className="px-3 py-2 text-right text-xs whitespace-nowrap" data-testid="row-left-page">
+                      {attempt.focusLosses > 0 ? <span className="text-amber-700 font-medium">{attempt.focusLosses}×</span> : <span className="text-slate-300">0</span>}
                     </td>
                     {questions.map((q) => {
                       const answer = attempt.answers[q.id];
