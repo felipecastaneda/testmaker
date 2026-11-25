@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  attemptIsOver,
   availabilityOf,
   isValidJoinCode,
   JOIN_CODE_ALPHABET,
@@ -59,5 +60,27 @@ describe("validateAssignmentOptions", () => {
     [{ ...ok, timeLimitMinutes: 601 }, /between 1 and 600/],
   ])("rejects %o", (options, message) => {
     expect(validateAssignmentOptions(options)).toMatch(message);
+  });
+});
+
+describe("attemptIsOver", () => {
+  const now = Date.parse("2026-12-01T10:00:00.000Z");
+  const open = { status: "open" as const, closesAt: null };
+
+  it("ends at the deadline plus a 30-second grace", () => {
+    expect(attemptIsOver(open, { deadline: "2026-12-01T09:59:40.000Z" }, now)).toBe(false);
+    expect(attemptIsOver(open, { deadline: "2026-12-01T09:59:20.000Z" }, now)).toBe(true);
+    expect(attemptIsOver(open, { deadline: null }, now)).toBe(false);
+  });
+
+  it("ends when the professor closes the exam, even with extra time", () => {
+    expect(attemptIsOver({ status: "closed" }, { deadline: null }, now)).toBe(true);
+    expect(attemptIsOver({ status: "closed" }, { deadline: "2026-12-01T11:00:00.000Z", extended: true }, now)).toBe(true);
+  });
+
+  it("ends when the window closes, unless the student was given extra time", () => {
+    const pastClose = { status: "open" as const, closesAt: "2026-12-01T09:00:00.000Z" };
+    expect(attemptIsOver(pastClose, { deadline: "2026-12-01T10:30:00.000Z" }, now)).toBe(true);
+    expect(attemptIsOver(pastClose, { deadline: "2026-12-01T10:30:00.000Z", extended: true }, now)).toBe(false);
   });
 });

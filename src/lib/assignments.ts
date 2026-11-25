@@ -48,3 +48,23 @@ export function validateAssignmentOptions(o: Pick<AssignmentOptions, "opensAt" |
   }
   return null;
 }
+
+/** Attempts may finish this long after their deadline (network lag, auto-submit). */
+export const DEADLINE_GRACE_MS = 30_000;
+
+/**
+ * Is a student's attempt over? Its own deadline passed (plus grace), the professor closed
+ * the exam, or the window closed. Extra time from the professor outlasts the window, but
+ * not "Close now".
+ */
+export function attemptIsOver(
+  assignment: { status: AssignmentStatus; opensAt?: string | null; closesAt?: string | null },
+  attempt: { deadline?: string | null; extended?: boolean },
+  now: number = Date.now()
+): boolean {
+  const deadline = attempt.deadline ?? null;
+  if (deadline !== null && now > Date.parse(deadline) + DEADLINE_GRACE_MS) return true;
+  if (assignment.status === "closed") return true;
+  if (attempt.extended === true) return false;
+  return availabilityOf({ status: assignment.status, opensAt: assignment.opensAt ?? null, closesAt: assignment.closesAt ?? null }, new Date(now)) === "closed";
+}

@@ -3,12 +3,12 @@ import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { FieldPath, FieldValue, type DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import { UserFacingError } from "./errors";
-import { availabilityOf, isValidJoinCode, normalizeJoinCode } from "@/lib/assignments";
+import { attemptIsOver, availabilityOf, isValidJoinCode, normalizeJoinCode } from "@/lib/assignments";
 import type { JoinResult, PublicAssignmentInfo, StudentExamView } from "@/lib/exam-types";
 import { attemptDeadline, cleanName, gradeAttempt, studentKeyOf, studentResult, type AttemptGrade } from "@/lib/grading";
 import { orderOptions } from "@/lib/question-utils";
 import { toStudentQuestion } from "@/lib/student-view";
-import type { QuestionData } from "@/lib/types";
+import type { AssignmentStatus, QuestionData } from "@/lib/types";
 import { seededShuffle } from "@/lib/utils";
 
 /*
@@ -26,15 +26,13 @@ const ASSIGNMENTS = "assignments";
 const ATTEMPTS = "attempts";
 const QUESTIONS = "questions";
 const JOIN_CODES = "joinCodes";
-/** Answers arriving this long after the deadline still count (network lag, auto-submit). */
-const GRACE_MS = 30_000;
 /** Abuse guard: no class is this big. */
 const MAX_ATTEMPTS_PER_ASSIGNMENT = 2_000;
 const ID = /^[A-Za-z0-9_-]{1,200}$/;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
-type StoredQuestion = QuestionData & { position: number; accepted?: string[] };
+export type StoredQuestion = QuestionData & { position: number; accepted?: string[] };
 
 const NOT_AVAILABLE: Record<string, string> = {
   draft: "This exam isn't open yet. Check with your professor.",
@@ -74,7 +72,7 @@ export async function getPublicInfo(code: string): Promise<PublicAssignmentInfo>
   };
 }
 
-async function readQuestions(assignment: DocumentReference): Promise<Map<string, StoredQuestion>> {
+export async function readQuestions(assignment: DocumentReference): Promise<Map<string, StoredQuestion>> {
   const snap = await assignment.collection(QUESTIONS).orderBy("position").get();
   return new Map(snap.docs.map((d) => [d.id, d.data() as StoredQuestion]));
 }
@@ -119,9 +117,22 @@ async function finish(ctx: AttemptContext, by: "student" | "deadline" | "teacher
 }
 
 /** Time is up, or the professor closed the exam: lock in what was saved. */
+/**
+ * Is this attempt over? Its own deadline passed, the professor closed the exam, or the
+ * window closed. Extra time from the professor outlasts the window, but not "Close now".
+ */
 function isOver(ctx: AttemptContext, now = Date.now()): boolean {
-  const deadline = ctx.attempt.deadline as string | null;
-  return (deadline !== null && now > Date.parse(deadline) + GRACE_MS) || availability(ctx.assignment) === "closed";
+  return attemptIsOver(ctx.assignment as { status: AssignmentStatus }, ctx.attempt, now);
+}
+
+/** Submit every attempt whose time is up (professors see final grades without waiting for students). */
+export async function finishExpiredAttempts(assignmentRef: DocumentReference): Promise<number> {
+  const [assignmentSnap, attempts] = await Promise.all([assignmentRef.get(), assignmentRef.collection(ATTEMPTS).get()]);
+  const assignment = assignmentSnap.data();
+  if (!assignment) return 0;
+  const expired = attempts.docs.filter((a) => !a.get("submittedAt") && attemptIsOver(assignment as { status: AssignmentStatus }, a.data()));
+  for (const a of expired) await finish({ assignmentRef, attemptRef: a.ref, assignment, attempt: a.data() }, "deadline");
+  return expired.length;
 }
 
 async function finishIfOver(ctx: AttemptContext): Promise<AttemptContext> {

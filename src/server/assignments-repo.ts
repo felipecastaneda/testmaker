@@ -25,7 +25,7 @@ const JOIN_CODES = "joinCodes";
 const NOT_FOUND = "Assignment not found.";
 const IN_LIMIT = 30;
 
-function toSummary(id: string, d: FirebaseFirestore.DocumentData, canEdit: boolean): AssignmentSummary {
+export function toSummary(id: string, d: FirebaseFirestore.DocumentData, canEdit: boolean): AssignmentSummary {
   return {
     id,
     orgId: d.orgId,
@@ -53,7 +53,7 @@ function toSummary(id: string, d: FirebaseFirestore.DocumentData, canEdit: boole
 }
 
 /** Load an assignment the user can see, with whether they may change it. */
-async function getAccessible(user: AuthedUser, id: string) {
+export async function getAccessible(user: AuthedUser, id: string) {
   if (!id || id.includes("/")) throw new UserFacingError(NOT_FOUND);
   const ref = adminDb().collection(ASSIGNMENTS).doc(id);
   const snap = await ref.get();
@@ -64,7 +64,7 @@ async function getAccessible(user: AuthedUser, id: string) {
   return { ref, snap, canEdit: course.access.edit };
 }
 
-async function requireEditable(user: AuthedUser, id: string) {
+export async function requireEditable(user: AuthedUser, id: string) {
   const found = await getAccessible(user, id);
   if (!found.canEdit) throw new UserFacingError("You can view this assignment but not change it.");
   return found;
