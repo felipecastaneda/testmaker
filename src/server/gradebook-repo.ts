@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import { getAccessible, requireEditable, toSummary } from "./assignments-repo";
 import { finishExpiredAttempts, readQuestions } from "./attempts-repo";
+import { readClassList } from "./paper-repo";
 import { deleteScan } from "./scans-store";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
@@ -22,8 +23,9 @@ const allOptions = (q: QuestionData) => (isTrueFalse(q) ? ["True", "False"] : [q
 export async function getGradebook(user: AuthedUser, id: string): Promise<GradebookView> {
   const { ref, canEdit } = await getAccessible(user, id);
   await finishExpiredAttempts(ref);
-  const [snap, questions, attempts] = await Promise.all([ref.get(), readQuestions(ref), ref.collection(ATTEMPTS).get()]);
+  const [snap, questions, attempts, classList] = await Promise.all([ref.get(), readQuestions(ref), ref.collection(ATTEMPTS).get(), readClassList(ref)]);
   return {
+    classList: snap.get("delivery") === "paper" ? classList : [],
     assignment: toSummary(snap.id, snap.data()!, canEdit, {
       started: attempts.size,
       submitted: attempts.docs.filter((d) => d.get("submittedAt")).length,

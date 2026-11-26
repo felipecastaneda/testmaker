@@ -63,6 +63,7 @@ function blocker(row: Row, exam: PaperExam, variants: Variants, rows: Row[]): st
     return "id" in other && other.id === id.id;
   });
   if (dup) return `Same student ID as ${dup.label}.`;
+  if (!row.reviewed && exam.classList.length && !exam.classList.some((e) => e.id === id.id)) return "Not on the class list: check the ID.";
   if (!row.reviewed && (row.idDoubtful || row.versionUnknown || row.flags.some(Boolean))) return "Check this sheet.";
   return null;
 }
@@ -282,6 +283,7 @@ export function PaperScanPanel({ assignment: a, exam, variants, onSaved }: Paper
                               className={`h-8 w-32 font-mono uppercase ${row.idDoubtful && !row.reviewed ? "border-amber-400" : ""}`}
                               onChange={(e) => update(row.key, { studentId: e.target.value, idDoubtful: false })}
                             />
+                            {listedName(row.studentId, exam) && <span className="block text-[11px] text-emerald-700 mt-0.5">{listedName(row.studentId, exam)}</span>}
                           </td>
                           <td className="px-3 py-2">
                             <select
@@ -445,4 +447,10 @@ function previewScore(row: Row, exam: PaperExam, variants: Variants): string {
   if ("error" in parsed) return "";
   const g = gradeAttempt(exam.questions, lettersToAnswers(variant, parsed.letters));
   return ` · ${g.earned} / ${g.possible} (${percentage(g.earned, g.possible)}%)`;
+}
+
+/** The class-list name for a typed or read ID, if any. */
+function listedName(studentId: string, exam: PaperExam): string | null {
+  const id = normalizePaperId(studentId, exam.paper);
+  return "id" in id ? (exam.classList.find((e) => e.id === id.id)?.name ?? null) : null;
 }

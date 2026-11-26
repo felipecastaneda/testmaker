@@ -191,6 +191,12 @@ production data or spends API credits. First run: `npx playwright install chromi
   attempts with `entry: "scan"`, and a downscaled JPEG is stored in Cloud Storage
   (`paper-scans/{assignment}/{attempt}.jpg`, server-only) so the professor can *View scan* from
   the gradebook. Images are deleted with the attempt or the assignment.
+- **Class list (paper exams, optional)**: paste "ID, name" lines (or "name, ID"; tab or
+  semicolon separated works; IDs must contain a digit). Names then fill in from the student ID
+  (typed or scanned), an ID that isn't on the list is flagged before saving (usually a misread
+  or mistyped ID), and the gradebook lists who has no answers yet. Stored at
+  `assignments/{id}/meta/classList`. The gradebook also shows the **average per version**, to
+  spot a version that turned out harder.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.
@@ -217,6 +223,7 @@ invites/{sha256(token)}                      orgId, email, role, expiresAt, acce
 usage/{uid}_{yyyy-mm-dd}                     daily question count
 assignments/{id}                             options, delivery (online | paper), paper {versions, idLength, idCharset, seed}, status, joinCode, testVersion, ...
 assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
+assignments/{id}/meta/classList              entries [{id, name}] (paper exams, optional)
 assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade (paper: source, variant, entry, letters)
 joinCodes/{code}                             assignmentId
 Storage: paper-scans/{assignmentId}/{attemptId}.jpg   scanned answer sheet (paper exams)

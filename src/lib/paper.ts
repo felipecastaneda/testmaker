@@ -114,4 +114,68 @@ export interface PaperExam {
   seed: string;
   /** In assignment order, with the answer key (professors only). */
   questions: (QuestionData & { accepted?: string[] })[];
+  /** Optional class list (empty when none). */
+  classList: ClassListEntry[];
 }
+
+// ---------------------------------------------------------------------------
+// Class list (optional, per paper exam)
+// ---------------------------------------------------------------------------
+
+export interface ClassListEntry {
+  id: string;
+  name: string;
+}
+
+export const MAX_CLASS_LIST = 2_000;
+
+/**
+ * Parse a pasted class list: one student per line, "ID, Name" (or tab/semicolon separated, or
+ * "Name, ID"). IDs must contain a digit. A header line and blank lines are skipped.
+ */
+export function parseClassList(
+  text: string,
+  paper: Pick<PaperOptions, "idLength" | "idCharset">
+): { entries: ClassListEntry[]; problems: string[] } {
+  const entries: ClassListEntry[] = [];
+  const problems: string[] = [];
+  const seen = new Set<string>();
+  const lines = text.split(/\r?\n/);
+  lines.forEach((raw, i) => {
+    const line = raw.trim();
+    if (!line) return;
+    const sep = line.includes("\t") ? "\t" : line.includes(";") ? ";" : ",";
+    const at = line.indexOf(sep);
+    const first = at < 0 ? line : line.slice(0, at);
+    const rest = at < 0 ? "" : line.slice(at + 1);
+    const lastAt = line.lastIndexOf(sep);
+    const last = lastAt < 0 ? "" : line.slice(lastAt + 1);
+    let id: string | null = null;
+    let name = "";
+    const a = normalizePaperId(first, paper);
+    const b = last ? normalizePaperId(last, paper) : null;
+    // With letter IDs, words ("Ana", a "Name" header) also pass as IDs; real student IDs have a digit.
+    const isId = (r: ReturnType<typeof normalizePaperId> | null): r is { id: string } => !!r && "id" in r && /\d/.test(r.id);
+    if (isId(a)) {
+      id = a.id;
+      name = rest;
+    } else if (isId(b)) {
+      id = b.id;
+      name = line.slice(0, lastAt);
+    }
+    if (!id) {
+      if (i > 0 || entries.length) problems.push(`Line ${i + 1}: no valid student ID ("${line.slice(0, 40)}").`);
+      return; // the first line may be a header
+    }
+    if (seen.has(id)) {
+      problems.push(`Line ${i + 1}: ${id} is listed twice.`);
+      return;
+    }
+    seen.add(id);
+    entries.push({ id, name: name.replace(/\s+/g, " ").trim().replace(/^"|"$/g, "").slice(0, 120) });
+  });
+  if (entries.length > MAX_CLASS_LIST) problems.push(`At most ${MAX_CLASS_LIST} students.`);
+  return { entries: entries.slice(0, MAX_CLASS_LIST), problems };
+}
+
+export const classListText = (entries: ClassListEntry[]) => entries.map((e) => (e.name ? `${e.id}, ${e.name}` : e.id)).join("\n");
