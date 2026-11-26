@@ -660,6 +660,86 @@ test.describe.serial("TestMaker", () => {
     await expect(page.getByTestId("assignment-item").filter({ hasText: "Paper Quiz" }).getByTestId("availability")).toHaveText("Paper");
   });
 
+  test("paper exams: scan a photographed answer sheet, check it, save it, view it", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.goto("/assignments");
+    await page.getByTestId("assignment-item").filter({ hasText: "Paper Quiz" }).click();
+    await expect(page.getByRole("heading", { name: "Paper Quiz" })).toBeVisible();
+
+    // Print one version-B sheet and "fill it in" with a pen: ID EF9012, the key's answers,
+    // plus a second mark on question 2.
+    await page.getByLabel("Answer sheets per version").fill("1");
+    const [print] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open print view" }).click()]);
+    await print.emulateMedia({ media: "screen" });
+    const keyB = (await print.locator('.key[data-version="B"] .keylist strong').allTextContents()).map((l) => l.charCodeAt(0) - 65);
+    const optionCounts = await print.locator('.booklet[data-version="B"] .q ol').evaluateAll((lists) => lists.map((l) => l.children.length));
+    const sheet = print.locator('.sheet-page[data-version="B"] svg.sheet');
+    await sheet.evaluate(
+      (svg, { key, counts }) => {
+        const circles = [...svg.querySelectorAll("circle")];
+        const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+        const fill = (c: Element) => {
+          c.setAttribute("fill", "#1e293b");
+          c.setAttribute("r", "1.9");
+        };
+        [..."EF9012"].forEach((ch, col) => fill(circles[col * chars.length + chars.indexOf(ch)]));
+        let index = 6 * chars.length;
+        counts.forEach((n, q) => {
+          fill(circles[index + key[q]]);
+          if (q === 1) fill(circles[index + ((key[q] + 1) % n)]);
+          index += n;
+        });
+      },
+      { key: keyB, counts: optionCounts }
+    );
+    await print.setViewportSize({ width: 1000, height: 1200 });
+    const notASheet = await print.screenshot({ clip: { x: 0, y: 0, width: 400, height: 300 } }); // booklet text
+    await sheet.scrollIntoViewIfNeeded();
+    const box = (await sheet.boundingBox())!;
+    const photo = await print.screenshot({ clip: { x: box.x - 20, y: box.y - 20, width: box.width + 40, height: box.height + 40 } });
+    await print.close();
+
+    await page.getByLabel("Answer sheet files").setInputFiles([
+      { name: "sheet-b.png", mimeType: "image/png", buffer: photo },
+      { name: "desk.png", mimeType: "image/png", buffer: notASheet },
+    ]);
+    const rows = page.getByTestId("scan-row");
+    await expect(rows).toHaveCount(2);
+    await expect(rows.nth(1).getByTestId("scan-error")).toContainText("Couldn't find the four black corner squares");
+    const row = rows.first();
+    await expect(row.getByLabel("Student ID for sheet-b.png")).toHaveValue("EF9012");
+    await expect(row.getByLabel("Version for sheet-b.png")).toHaveValue("B");
+    const read = await row.getByLabel("Answers for sheet-b.png").inputValue();
+    expect(read[1]).toBe("-"); // two marks: not guessed
+    expect(read[0]).toBe("ABCDE"[keyB[0]]);
+    expect(read[2]).toBe("ABCDE"[keyB[2]]);
+    await expect(row).toContainText("Q2: two marks");
+    await expect(row.getByTestId("scan-status")).toContainText("Check");
+    await expect(page.getByRole("button", { name: "Save 0 sheets" })).toBeDisabled();
+
+    // Look at it, fix question 2 (the student meant the key's answer), and save.
+    await row.getByRole("button", { name: "Check sheet-b.png" }).click();
+    await expect(page.getByRole("dialog").getByAltText("Scanned answer sheet")).toBeVisible();
+    await page.getByRole("dialog").getByRole("button", { name: "Looks right" }).click();
+    await row.getByLabel("Answers for sheet-b.png").fill(keyB.map((k) => "ABCDE"[k]).join(""));
+    await expect(row.getByTestId("scan-status")).toContainText("(100%)");
+    await page.getByRole("button", { name: "Save 1 sheet" }).click();
+    await expect(row.getByTestId("scan-status")).toContainText("Saved");
+
+    // The gradebook has the scanned student, and the stored image can be viewed.
+    const student = page.getByTestId("gradebook-row").filter({ hasText: "EF9012" });
+    await expect(student.getByTestId("row-score")).toContainText("(100%)");
+    await expect(student.getByTestId("row-version")).toContainText("B · scanned");
+    await student.getByRole("button", { name: "View scan for EF9012" }).click();
+    await expect(page.getByTestId("scan-view").getByAltText("Scanned answer sheet")).toBeVisible();
+    await page.keyboard.press("Escape");
+
+    // Deleting the entry deletes its image too (no error, row gone).
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete EF9012" }).click();
+    await expect(student).toHaveCount(0);
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();

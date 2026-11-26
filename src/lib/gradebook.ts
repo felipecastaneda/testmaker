@@ -34,6 +34,8 @@ export interface GradebookAttempt {
   /** Paper version ("A".."D"), or null online. */
   variant: string | null;
   entry: "typed" | "scan" | null;
+  /** A scanned sheet image is stored with this attempt. */
+  hasScan: boolean;
 }
 
 export interface GradebookView {

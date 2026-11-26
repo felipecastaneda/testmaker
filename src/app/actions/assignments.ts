@@ -30,6 +30,12 @@ const Paper = z
     idCharset: z.enum(['letters_digits', 'digits']),
   })
   .nullable();
+const Scan = z.object({
+  imageBase64: z.string().min(1).max(3_000_000),
+  width: z.number().int().min(1).max(10_000),
+  height: z.number().int().min(1).max(10_000),
+  corners: z.array(z.object({ x: z.number().finite(), y: z.number().finite() })).length(4),
+});
 const PaperAnswers = z.object({
   studentId: z.string().max(40),
   studentName: z.string().max(200),
@@ -67,6 +73,24 @@ export async function getPaperExam(idToken: string, id: string): Promise<ActionR
 /** Grade and save one student's typed answers. Returns `saved: false` if the ID already has an attempt and `replace` is off. */
 export async function savePaperAnswers(idToken: string, id: string, input: paper.PaperAnswersInput): Promise<ActionResult<paper.SavePaperResult>> {
   return withUser(idToken, (user) => paper.savePaperAnswers(user, parse(Id, id), parse(PaperAnswers, input)));
+}
+
+/** Like savePaperAnswers, plus the scanned sheet (JPEG, base64), which is stored with the attempt. */
+export async function savePaperScan(
+  idToken: string,
+  id: string,
+  input: paper.PaperAnswersInput,
+  scan: { imageBase64: string; width: number; height: number; corners: { x: number; y: number }[] }
+): Promise<ActionResult<paper.SavePaperResult>> {
+  return withUser(idToken, (user) => {
+    const s = parse(Scan, scan);
+    return paper.savePaperAnswers(user, parse(Id, id), parse(PaperAnswers, input), { ...s, image: Buffer.from(s.imageBase64, "base64") });
+  });
+}
+
+/** The stored scan of one paper attempt. */
+export async function getPaperScan(idToken: string, id: string, attemptId: string): Promise<ActionResult<paper.PaperScanView>> {
+  return withUser(idToken, (user) => paper.getPaperScan(user, parse(Id, id), parse(Id, attemptId)));
 }
 
 export async function listAssignments(idToken: string, courseId?: string): Promise<ActionResult<AssignmentSummary[]>> {

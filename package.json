@@ -13,7 +13,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
-    "emulators": "firebase emulators:start --only auth,firestore --project demo-testmaker",
+    "emulators": "firebase emulators:start --only auth,firestore,storage --project demo-testmaker",
     "migrate:step1": "tsx --conditions=react-server scripts/migrate-step1.ts",
     "loadtest:exam": "firebase emulators:exec --only firestore --project demo-testmaker \"tsx --conditions=react-server scripts/load-test-exam.ts\""
   },

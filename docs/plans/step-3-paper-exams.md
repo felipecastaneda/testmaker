@@ -1,6 +1,6 @@
 # Step 3: Paper exams (print, scan or type answers, grade)
 
-Status: part 1 built (2026-11-26) · Written 2026-11-25 · Builds on step 2 (assignments, grading, gradebook)
+Status: parts 1–2 built (2026-11-26) · Written 2026-11-25 · Builds on step 2 (assignments, grading, gradebook)
 
 ## Goal
 
@@ -131,8 +131,9 @@ every page, and have no answer lines.
    sheet's own paper/ink levels.
 3. A bubble counts as filled when it's clearly darker than the others in its row; a row with
    two clear marks is *multiple*, one with only a faint mark is *uncertain*, none is *blank*.
-4. Plain TypeScript on `<canvas>`, no OpenCV. Runs in a Web Worker so 200 pages don't freeze
-   the tab. Unit tests run it on synthetic sheets (rotated, skewed, blurred, uneven light).
+4. Plain TypeScript on `<canvas>`, no OpenCV. Runs on the page one sheet at a time (a fraction of a
+   second each), yielding between sheets so the tab stays responsive. Unit tests run it on synthetic
+   sheets (rotated, skewed, blurred, uneven light).
 
 **Review screen:** one row per sheet with the student ID, version, score preview and flags; open
 a sheet to see the photo with the detected marks drawn on it and fix any answer or the ID by

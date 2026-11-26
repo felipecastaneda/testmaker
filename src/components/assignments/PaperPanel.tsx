@@ -11,6 +11,7 @@ import { gradeAttempt, percentage } from "@/lib/grading";
 import { lettersToAnswers, normalizePaperId, paperVariants, parseTypedAnswers, type PaperExam } from "@/lib/paper";
 import { MAX_SHEETS_PER_VERSION, paperPrintHtml } from "@/lib/paper-print";
 import type { AssignmentSummary } from "@/lib/types";
+import { PaperScanPanel } from "./PaperScanPanel";
 
 
 const selectClass = "h-10 px-3 rounded-md border border-input bg-white text-sm";
@@ -47,6 +48,7 @@ export function PaperPanel({ assignment: a, courseName, onSaved }: PaperPanelPro
   return (
     <>
       <PrintSection assignment={a} courseName={courseName} exam={exam} variants={variants} />
+      {a.canEdit && <PaperScanPanel assignment={a} exam={exam} variants={variants} onSaved={onSaved} />}
       {a.canEdit && <TypeAnswersSection assignment={a} exam={exam} variants={variants} onSaved={onSaved} />}
     </>
   );
@@ -169,7 +171,7 @@ function TypeAnswersSection({ assignment: a, exam, variants, onSaved }: { assign
       </div>
       <p className="text-xs text-muted-foreground">
         One student at a time: type the letters they marked, in order (spaces are ignored; use <span className="font-mono">-</span> for a blank). Enter saves and
-        moves to the next student. Scanning sheets comes next.
+        moves to the next student. Handy for a few sheets, or when there&apos;s no scanner or camera.
       </p>
       <form
         className="grid gap-3 sm:grid-cols-[1fr_1.4fr_auto]"

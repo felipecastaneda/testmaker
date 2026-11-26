@@ -1,6 +1,7 @@
 rules_version = '2';
 
-// TestMaker doesn't use Cloud Storage. Deny everything until a feature needs it.
+// Only the server (firebase-admin) uses Cloud Storage: paper exam scans under paper-scans/.
+// Browsers never read or write it directly.
 service firebase.storage {
   match /b/{bucket}/o {
     match /{allPaths=**} {

@@ -1,7 +1,7 @@
 import { defineConfig, devices } from "@playwright/test";
 
 /**
- * End-to-end tests run the real app against the Firebase Auth + Firestore emulators
+ * End-to-end tests run the real app against the Firebase Auth, Firestore and Storage emulators
  * (project "demo-testmaker": demo-* projects can never reach production) with the
  * LLM replaced by a deterministic fake (TESTMAKER_FAKE_AI, ignored in production).
  *
@@ -12,6 +12,7 @@ export const E2E = {
   projectId: "demo-testmaker",
   authHost: "127.0.0.1:9099",
   firestoreHost: "127.0.0.1:8080",
+  storageHost: "127.0.0.1:9199",
   teacher: "teacher@example.com",
   outsider: "outsider@example.com",
   /** Also allow-listed; must never see the teacher's tests. */
@@ -38,7 +39,7 @@ export default defineConfig({
     ...devices["Desktop Chrome"],
   },
   webServer: {
-    command: `firebase emulators:exec --only auth,firestore --project ${E2E.projectId} "npx next dev -p ${E2E.port}"`,
+    command: `firebase emulators:exec --only auth,firestore,storage --project ${E2E.projectId} "npx next dev -p ${E2E.port}"`,
     url: `http://localhost:${E2E.port}`,
     timeout: 240_000,
     reuseExistingServer: false,
@@ -51,6 +52,8 @@ export default defineConfig({
       NEXT_PUBLIC_FIREBASE_AUTH_EMULATOR_HOST: E2E.authHost,
       FIREBASE_AUTH_EMULATOR_HOST: E2E.authHost,
       FIRESTORE_EMULATOR_HOST: E2E.firestoreHost,
+      FIREBASE_STORAGE_EMULATOR_HOST: E2E.storageHost,
+      NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET: `${E2E.projectId}.appspot.com`,
       TESTMAKER_FAKE_AI: "1",
       ALLOWED_EMAILS: `${E2E.teacher},${E2E.colleague}`,
       PLATFORM_ADMIN_EMAILS: E2E.teacher,

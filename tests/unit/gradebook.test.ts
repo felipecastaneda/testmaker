@@ -32,6 +32,7 @@ function attempt(over: Partial<GradebookAttempt> & { answers: Record<string, str
     source: "online",
     variant: null,
     entry: null,
+    hasScan: false,
     ...over,
   };
 }
