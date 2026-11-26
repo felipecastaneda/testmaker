@@ -18,16 +18,17 @@ export interface TestVariant {
 /**
  * Build `count` printable versions of a test. Version A keeps the current question
  * order; later versions also shuffle the question order. Every version has its own
- * answer-option order, so neighbours can't copy answers.
+ * answer-option order, so neighbours can't copy answers. `seed` makes a different, but
+ * still repeatable, set of versions (paper assignments use their own).
  */
-export function buildVariants(questions: QuestionData[], count: number): TestVariant[] {
+export function buildVariants(questions: QuestionData[], count: number, seed = "variant"): TestVariant[] {
   return Array.from({ length: Math.max(1, count) }, (_, v) => {
     const label = optionLetter(v);
-    const ordered = v === 0 ? questions : seededShuffle(questions, `variant:${label}`);
+    const ordered = v === 0 ? questions : seededShuffle(questions, `${seed}:${label}`);
     return {
       label,
       questions: ordered.map((q) => {
-        const options = orderOptions(q, `variant:${label}`);
+        const options = orderOptions(q, `${seed}:${label}`);
         return { question: q, options, correctIndex: options.indexOf(q.correctAnswer) };
       }),
     };

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { Check, Clock, Download, Eye, EyeOff, Loader2, Minus, RefreshCw, RotateCcw, X } from "lucide-react";
+import { Check, Clock, Download, Eye, EyeOff, Loader2, Minus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
 import { extendAttempt, getGradebook, regradeQuestion, resetAttempt, setResultsReleased } from "@/app/actions/assignments";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
@@ -70,8 +70,9 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
   const stats = questionStats(questions, attempts);
   const average = averagePercent(attempts);
   const submitted = attempts.filter((x) => x.status === "submitted").length;
-  const rows = [...attempts].sort((x, y) => x.studentName.localeCompare(y.studentName));
-  const canRelease = a.canEdit && a.resultsRelease !== "immediately";
+  const isPaper = a.delivery === "paper";
+  const rows = [...attempts].sort((x, y) => x.studentName.localeCompare(y.studentName) || x.studentId.localeCompare(y.studentId));
+  const canRelease = a.canEdit && !isPaper && a.resultsRelease !== "immediately";
 
   const exportCsv = () =>
     downloadBlob(new Blob([gradebookCsv(view)], { type: "text/csv;charset=utf-8" }), `${fileSafeName(a.title)}_grades.csv`);
@@ -84,6 +85,11 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
   };
 
   const reset = (attempt: GradebookAttempt) => {
+    if (isPaper) {
+      if (!confirm(`Delete the answers entered for ${attempt.studentName || attempt.studentId}? You can enter them again.`)) return;
+      void act((t) => resetAttempt(t, assignmentId, attempt.id), "Answers deleted");
+      return;
+    }
     if (
       !confirm(
         `Reset ${attempt.studentName}'s attempt (${attempt.studentId})? Their answers and grade are deleted and they can start again. Use this if they switched devices or someone else used their ID.`
@@ -97,7 +103,7 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-sm text-slate-600" data-testid="gradebook-summary">
-          {submitted} submitted · {attempts.length - submitted} in progress
+          {isPaper ? `${attempts.length} answer ${attempts.length === 1 ? "sheet" : "sheets"} entered` : `${submitted} submitted · ${attempts.length - submitted} in progress`}
           {average !== null && ` · average ${average}%`}
         </p>
         <div className="flex flex-wrap gap-2">
@@ -136,19 +142,23 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
       )}
 
       {attempts.length === 0 ? (
-        <p className="text-sm text-slate-500 py-6 text-center">No students have started yet.</p>
+        <p className="text-sm text-slate-500 py-6 text-center">{isPaper ? "No answers entered yet." : "No students have started yet."}</p>
       ) : (
         <div className="overflow-x-auto rounded-xl border border-slate-100">
           <table className="w-full text-sm" aria-label="Gradebook">
             <thead className="bg-slate-50 text-xs text-slate-500">
               <tr>
                 <th className="text-left font-semibold px-3 py-2">Student</th>
-                <th className="text-left font-semibold px-3 py-2">Status</th>
+                <th className="text-left font-semibold px-3 py-2">{isPaper ? "Version" : "Status"}</th>
                 <th className="text-right font-semibold px-3 py-2">Score</th>
-                <th className="text-right font-semibold px-3 py-2">Time</th>
-                <th className="text-right font-semibold px-3 py-2" title="Times the student left the exam page (switched tab or app). Information only.">
-                  Left page
-                </th>
+                {!isPaper && (
+                  <>
+                    <th className="text-right font-semibold px-3 py-2">Time</th>
+                    <th className="text-right font-semibold px-3 py-2" title="Times the student left the exam page (switched tab or app). Information only.">
+                      Left page
+                    </th>
+                  </>
+                )}
                 {questions.map((q, i) => {
                   const s = stats[q.id];
                   return (
@@ -179,24 +189,35 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                 return (
                   <tr key={attempt.id} data-testid="gradebook-row">
                     <td className="px-3 py-2">
-                      <span className="font-medium text-slate-800">{attempt.studentName}</span>
-                      <span className="block text-xs text-muted-foreground">{attempt.studentId}</span>
+                      <span className="font-medium text-slate-800">{attempt.studentName || attempt.studentId}</span>
+                      {attempt.studentName && <span className="block text-xs text-muted-foreground">{attempt.studentId}</span>}
                     </td>
-                    <td className="px-3 py-2 text-xs whitespace-nowrap">
-                      {statusLabel(attempt)}
-                      {attempt.extended && attempt.status === "in_progress" && (
-                        <span className="block text-amber-700">extra time until {new Date(attempt.deadline!).toLocaleTimeString()}</span>
-                      )}
-                    </td>
+                    {isPaper ? (
+                      <td className="px-3 py-2 text-xs whitespace-nowrap" data-testid="row-version">
+                        <span className="font-semibold">{attempt.variant}</span>
+                        <span className="text-muted-foreground"> · {attempt.entry === "scan" ? "scanned" : "typed"}</span>
+                      </td>
+                    ) : (
+                      <td className="px-3 py-2 text-xs whitespace-nowrap">
+                        {statusLabel(attempt)}
+                        {attempt.extended && attempt.status === "in_progress" && (
+                          <span className="block text-amber-700">extra time until {new Date(attempt.deadline!).toLocaleTimeString()}</span>
+                        )}
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-right whitespace-nowrap" data-testid="row-score">
                       {g ? `${formatPoints(g.earned).replace(/ pts?$/, "")} / ${formatPoints(g.possible)} (${percentage(g.earned, g.possible)}%)` : "–"}
                     </td>
-                    <td className="px-3 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">
-                      {minutesTaken(attempt) !== null ? `${minutesTaken(attempt)} min` : ""}
-                    </td>
-                    <td className="px-3 py-2 text-right text-xs whitespace-nowrap" data-testid="row-left-page">
-                      {attempt.focusLosses > 0 ? <span className="text-amber-700 font-medium">{attempt.focusLosses}×</span> : <span className="text-slate-300">0</span>}
-                    </td>
+                    {!isPaper && (
+                      <>
+                        <td className="px-3 py-2 text-right text-xs text-muted-foreground whitespace-nowrap">
+                          {minutesTaken(attempt) !== null ? `${minutesTaken(attempt)} min` : ""}
+                        </td>
+                        <td className="px-3 py-2 text-right text-xs whitespace-nowrap" data-testid="row-left-page">
+                          {attempt.focusLosses > 0 ? <span className="text-amber-700 font-medium">{attempt.focusLosses}×</span> : <span className="text-slate-300">0</span>}
+                        </td>
+                      </>
+                    )}
                     {questions.map((q) => {
                       const answer = attempt.answers[q.id];
                       const cell = g?.perQuestion[q.id];
@@ -221,8 +242,8 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                             <Clock className="h-3.5 w-3.5 mr-1" /> Time
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-slate-500 hover:text-rose-600" onClick={() => reset(attempt)} disabled={busy} aria-label={`Reset ${attempt.studentName}`}>
-                          <RotateCcw className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs text-slate-500 hover:text-rose-600" onClick={() => reset(attempt)} disabled={busy} aria-label={`${isPaper ? "Delete" : "Reset"} ${attempt.studentName || attempt.studentId}`}>
+                          {isPaper ? <Trash2 className="h-3.5 w-3.5" /> : <RotateCcw className="h-3.5 w-3.5" />}
                         </Button>
                       </td>
                     )}

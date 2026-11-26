@@ -1,14 +1,16 @@
 import "server-only";
-import { randomInt } from "node:crypto";
+import { randomBytes, randomInt } from "node:crypto";
 import type { DocumentReference } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { loadTest } from "./tests-repo";
 import { getCourseAccess, listViewableCourses, requireCourseAccess } from "./workspace";
+import { getDeliveryModes } from "./settings-repo";
 import { availabilityOf, DEFAULT_MAX_STUDENTS, makeJoinCode, validateAssignmentOptions } from "@/lib/assignments";
+import { paperProblem } from "@/lib/paper";
 import { totalPoints } from "@/lib/question-utils";
-import type { AssignmentOptions, AssignmentStatus, AssignmentSummary, QuestionData } from "@/lib/types";
+import type { AssignmentOptions, AssignmentStatus, AssignmentSummary, PaperOptions, QuestionData } from "@/lib/types";
 
 /*
  * Data model
@@ -17,6 +19,9 @@ import type { AssignmentOptions, AssignmentStatus, AssignmentSummary, QuestionDa
  *   Started/submitted counts come from the attempts themselves (countAttempts), never a shared counter.
  *   assignments/{id}/questions/{qid} frozen copy of the test's questions (incl. the answer key) + position
  *   joinCodes/{code}                 { assignmentId } so students can find an assignment by its code
+ *
+ * Paper assignments (delivery "paper") have `paper: { versions, idLength, idCharset, seed }` and no
+ * join code; the professor types (or scans) their attempts in (paper-repo).
  *
  * An assignment is a snapshot: editing the test afterwards never changes it.
  */
@@ -43,8 +48,11 @@ export function toSummary(
   canEdit: boolean,
   stats: { started: number; submitted: number }
 ): AssignmentSummary {
+  const paper = d.delivery === "paper" && d.paper ? d.paper : null;
   return {
     id,
+    delivery: paper ? "paper" : "online",
+    paper: paper ? { versions: paper.versions, idLength: paper.idLength, idCharset: paper.idCharset } : null,
     orgId: d.orgId,
     courseId: d.courseId,
     testId: d.testId,
@@ -58,7 +66,7 @@ export function toSummary(
     showCorrectAnswers: d.showCorrectAnswers === true,
     status: d.status,
     availability: availabilityOf({ status: d.status, opensAt: d.opensAt ?? null, closesAt: d.closesAt ?? null }),
-    joinCode: d.joinCode,
+    joinCode: d.joinCode ?? "",
     questionCount: d.questionCount ?? 0,
     totalPoints: d.totalPoints ?? 0,
     stats,
@@ -93,16 +101,29 @@ function checkOptions(options: Pick<AssignmentOptions, "opensAt" | "closesAt" | 
   if (problem) throw new UserFacingError(problem);
 }
 
+/**
+ * Snapshot a test into a new assignment. With `paper` it's a paper exam (printed versions and
+ * answer sheets, no join code); otherwise it's online and `open` decides draft vs open.
+ */
 export async function createAssignment(
   user: AuthedUser,
   testId: string,
   options: AssignmentOptions,
-  open: boolean
+  open: boolean,
+  paper: PaperOptions | null = null
 ): Promise<string> {
   const test = await loadTest(user, testId);
   const { orgId } = await requireCourseAccess(user, test.courseId, "edit", "Test not found.");
   if (test.questions.length === 0) throw new UserFacingError("This test has no questions yet.");
-  checkOptions(options);
+  const modes = await getDeliveryModes(orgId, test.courseId);
+  if (paper && modes === "online") throw new UserFacingError("Paper exams are turned off for this course (Settings).");
+  if (!paper && modes === "paper") throw new UserFacingError("Online exams are turned off for this course (Settings).");
+  if (paper) {
+    const problem = paperProblem(test.questions, paper.idCharset);
+    if (problem) throw new UserFacingError(problem);
+  } else {
+    checkOptions(options);
+  }
 
   const db = adminDb();
   const ref = db.collection(ASSIGNMENTS).doc();
@@ -113,27 +134,41 @@ export async function createAssignment(
   test.questions.forEach((q: QuestionData, position) => writer.set(ref.collection(QUESTIONS).doc(q.id), { ...q, position }));
   await writer.close();
 
+  const base = {
+    ...options,
+    orgId,
+    courseId: test.courseId,
+    testId: test.id,
+    testVersion: test.version,
+    questionCount: test.questions.length,
+    totalPoints: totalPoints(test.questions),
+    resultsReleased: false,
+    createdBy: user.uid,
+    createdAt: now,
+    updatedAt: now,
+  };
+
+  if (paper) {
+    // No join code: a paper assignment can't be reached online.
+    await ref.create({
+      ...base,
+      delivery: "paper",
+      paper: { ...paper, seed: randomBytes(9).toString("base64url") },
+      status: "open",
+      opensAt: null,
+      closesAt: null,
+      timeLimitMinutes: null,
+    });
+    return ref.id;
+  }
+
   const status: AssignmentStatus = open ? "open" : "draft";
   for (let attempt = 0; ; attempt++) {
     const joinCode = makeJoinCode((n) => randomInt(n));
     const batch = db.batch();
     // create() fails if the code is taken, which fails the whole batch.
     batch.create(db.collection(JOIN_CODES).doc(joinCode), { assignmentId: ref.id, createdAt: now });
-    batch.create(ref, {
-      ...options,
-      orgId,
-      courseId: test.courseId,
-      testId: test.id,
-      testVersion: test.version,
-      status,
-      joinCode,
-      questionCount: test.questions.length,
-      totalPoints: totalPoints(test.questions),
-      resultsReleased: false,
-      createdBy: user.uid,
-      createdAt: now,
-      updatedAt: now,
-    });
+    batch.create(ref, { ...base, delivery: "online", status, joinCode });
     try {
       await batch.commit();
       return ref.id;
@@ -175,6 +210,8 @@ export async function updateAssignment(
 ): Promise<AssignmentSummary> {
   const { ref, snap } = await requireEditable(user, id);
   const current = snap.data()!;
+  // Paper exams only have a title to change: their versions and sheets may already be printed.
+  if (current.delivery === "paper") patch = patch.title === undefined ? {} : { title: patch.title };
   const merged = {
     opensAt: patch.opensAt !== undefined ? patch.opensAt : current.opensAt ?? null,
     closesAt: patch.closesAt !== undefined ? patch.closesAt : current.closesAt ?? null,
@@ -191,5 +228,6 @@ export async function deleteAssignment(user: AuthedUser, id: string): Promise<vo
   const { ref, snap } = await requireEditable(user, id);
   const db = adminDb();
   await db.recursiveDelete(ref);
-  await db.collection(JOIN_CODES).doc(snap.get("joinCode")).delete();
+  const joinCode = snap.get("joinCode");
+  if (joinCode) await db.collection(JOIN_CODES).doc(joinCode).delete();
 }

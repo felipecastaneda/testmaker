@@ -32,6 +32,9 @@ const ID = /^[A-Za-z0-9_-]{1,200}$/;
 
 const sha256 = (s: string) => createHash("sha256").update(s).digest("hex");
 
+/** One attempt per student ID: the attempt's id is derived from it (online and paper alike). */
+export const attemptIdFor = (assignmentId: string, studentKey: string) => sha256(`${assignmentId}:${studentKey}`).slice(0, 40);
+
 export type StoredQuestion = QuestionData & { position: number; accepted?: string[] };
 
 const NOT_AVAILABLE: Record<string, string> = {
@@ -196,7 +199,7 @@ export async function joinAssignment(code: string, rawName: string, rawStudentId
   if (!studentKey || studentId.length > 40) throw new UserFacingError("Please enter your student ID (up to 40 characters).");
 
   const assignmentRef = snap.ref;
-  const attemptRef = assignmentRef.collection(ATTEMPTS).doc(sha256(`${snap.id}:${studentKey}`).slice(0, 40));
+  const attemptRef = assignmentRef.collection(ATTEMPTS).doc(attemptIdFor(snap.id, studentKey));
   const questionIds = [...(await readQuestions(assignmentRef)).keys()];
   const order = d.shuffleQuestions ? seededShuffle(questionIds, attemptRef.id) : questionIds;
   const secret = randomBytes(32).toString("base64url");

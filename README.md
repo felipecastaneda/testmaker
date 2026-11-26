@@ -168,6 +168,18 @@ production data or spends API credits. First run: `npx playwright install chromi
   student actions (per server instance, best-effort: schools often share one IP), and up to
   10 App Hosting instances. Each time a student leaves the exam page is counted and shown in
   the gradebook/CSV as *Left page*: information only, it can't prove or prevent cheating.
+- **Paper exams**: in *Assign*, choose *Paper* (the course setting *How exams are given* can allow
+  online, paper or both). A paper assignment is a frozen copy like an online one, with 1–4
+  versions (A–D) whose question and option order come from a per-assignment seed, so a reprint is
+  always identical. Its page prints question booklets (a "Version X" header on every page), bubble
+  **answer sheets** pre-marked with their version, and answer keys, all as one document for
+  Letter or A4. The sheet (`src/lib/paper-sheet.ts`) is a fixed 190 × 255 mm layout with corner
+  markers, a code strip (version + a check of the assignment) and a student-ID grid of A–Z and
+  0–9 (or digits only, which leaves room for 100 questions instead of 75). The professor then
+  **types each student's answers** (`ABD-C…`, with a live score preview); they're stored as
+  ordinary attempts (`source: "paper"`, `variant`), so grading, regrade, item % and CSV work
+  unchanged. Re-entering a student ID asks before replacing. Scanning sheets comes next
+  ([plan](docs/plans/step-3-paper-exams.md)).
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.
@@ -192,9 +204,9 @@ tests/{testId}/versions/v{n}                 archived version metadata
 tests/{testId}/versions/v{n}/questions/{id}  archived questions
 invites/{sha256(token)}                      orgId, email, role, expiresAt, acceptedAt?, revokedAt?
 usage/{uid}_{yyyy-mm-dd}                     daily question count
-assignments/{id}                             options, status, joinCode, testVersion, stats, ...
+assignments/{id}                             options, delivery (online | paper), paper {versions, idLength, idCharset, seed}, status, joinCode, testVersion, ...
 assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
-assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade
+assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade (paper: source, variant, entry, letters)
 joinCodes/{code}                             assignmentId
 _meta/platform                               signupMode, allowedEmails
 ```

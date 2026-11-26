@@ -29,6 +29,9 @@ function attempt(over: Partial<GradebookAttempt> & { answers: Record<string, str
     extended: false,
     grade: gradeAttempt(keys, over.answers),
     focusLosses: 0,
+    source: "online",
+    variant: null,
+    entry: null,
     ...over,
   };
 }

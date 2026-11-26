@@ -49,6 +49,9 @@ export async function getGradebook(user: AuthedUser, id: string): Promise<Gradeb
         answers: d.get("answers") ?? {},
         grade: (d.get("grade") as AttemptGrade | undefined) ?? null,
         focusLosses: d.get("focusLosses") ?? 0,
+        source: d.get("source") === "paper" ? "paper" : "online",
+        variant: d.get("variant") ?? null,
+        entry: d.get("entry") ?? null,
       })
     ),
   };

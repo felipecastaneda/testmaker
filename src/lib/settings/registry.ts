@@ -100,6 +100,23 @@ export const SETTINGS = {
     default: 1,
     input: { kind: "number", min: 0, max: 100, step: 0.5 },
   }),
+  "delivery.modes": define<"both" | "online" | "paper">({
+    label: "How exams are given",
+    help: "Whether professors can assign tests online, on paper (printed answer sheets), or both.",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: true,
+    schema: z.enum(["both", "online", "paper"]),
+    default: "both",
+    input: {
+      kind: "select",
+      options: [
+        { value: "both", label: "Online and paper" },
+        { value: "online", label: "Online only" },
+        { value: "paper", label: "Paper only" },
+      ],
+    },
+  }),
   "assignments.defaultTimeLimit": define<number>({
     label: "Default time limit (minutes)",
     help: "Pre-filled when you assign a test online. 0 means no time limit.",
@@ -168,7 +185,7 @@ export const SETTING_KEYS = Object.keys(SETTINGS) as SettingKey[];
 export const GROUP_LABELS: Record<SettingGroup, string> = {
   generation: "Question generation",
   questions: "Questions",
-  assignments: "Online exams",
+  assignments: "Exams",
   courses: "Courses and staff",
 };
 

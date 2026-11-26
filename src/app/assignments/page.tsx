@@ -53,7 +53,7 @@ export default function AssignmentsPage() {
             <div className="text-center py-20 bg-white rounded-2xl border border-dashed border-slate-200 space-y-2">
               <ClipboardList className="mx-auto h-12 w-12 text-slate-300" />
               <h2 className="text-lg font-semibold text-slate-700">No assignments yet</h2>
-              <p className="text-sm text-slate-500">Open a test from your library and choose &quot;Assign online&quot;.</p>
+              <p className="text-sm text-slate-500">Open a test from your library and choose &quot;Assign&quot;.</p>
             </div>
           ) : (
             <ul className="space-y-3" aria-label="Assignments">
@@ -67,10 +67,14 @@ export default function AssignmentsPage() {
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
                         <span className="font-semibold text-slate-800 truncate">{a.title}</span>
-                        <AvailabilityBadge availability={a.availability} />
+                        {a.delivery === "paper" ? (
+                          <span className="text-[11px] rounded-full border px-2 py-0.5 bg-amber-50 text-amber-800 border-amber-200" data-testid="availability">Paper</span>
+                        ) : (
+                          <AvailabilityBadge availability={a.availability} />
+                        )}
                       </div>
                       <span className="text-xs text-muted-foreground">
-                        {a.stats.submitted} submitted · {a.stats.started} started
+                        {a.delivery === "paper" ? `${a.stats.submitted} entered` : `${a.stats.submitted} submitted · ${a.stats.started} started`}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground mt-1">

@@ -100,6 +100,8 @@ export interface CourseSummary {
     timeLimitMinutes: number | null;
     resultsRelease: ResultsRelease;
     showCorrectAnswers: boolean;
+    /** Online, paper, or both (setting `delivery.modes`). */
+    deliveryModes: DeliveryModes;
   };
   /** Effective generation settings for this course. */
   generation: {
@@ -183,8 +185,24 @@ export interface AssignmentOptions {
   maxStudents: number;
 }
 
+export type Delivery = "online" | "paper";
+/** Which delivery modes a course allows (setting `delivery.modes`). */
+export type DeliveryModes = "both" | "online" | "paper";
+export type PaperIdCharset = "letters_digits" | "digits";
+
+export interface PaperOptions {
+  /** Printed versions A, B, … (1–4). */
+  versions: number;
+  /** Student-ID columns on the answer sheet (4–12). */
+  idLength: number;
+  idCharset: PaperIdCharset;
+}
+
 export interface AssignmentSummary extends AssignmentOptions {
   id: string;
+  delivery: Delivery;
+  /** Only for paper assignments. */
+  paper: PaperOptions | null;
   orgId: string;
   courseId: string;
   testId: string;

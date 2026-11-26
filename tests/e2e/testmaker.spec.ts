@@ -261,7 +261,7 @@ test.describe.serial("TestMaker", () => {
     await page.getByRole("link", { name: "Back to TestMaker" }).click();
     await page.getByRole("button", { name: "My Library" }).click();
     await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
-    await page.getByRole("button", { name: "Assign online" }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await expect(dialog.getByLabel("Title students see")).toHaveValue("Points Quiz");
     await expect(dialog.getByLabel("Time limit in minutes (optional)")).toHaveValue("30");
@@ -312,7 +312,7 @@ test.describe.serial("TestMaker", () => {
     await page.goto("/");
     await page.getByRole("button", { name: "My Library" }).click();
     await page.getByTestId("library-item").filter({ hasText: "Points Quiz" }).getByRole("button", { name: /Open Test/ }).click();
-    await page.getByRole("button", { name: "Assign online" }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
     await page.getByRole("dialog").getByRole("button", { name: "Save as draft" }).click();
     await expect(page.getByTestId("availability")).toHaveText("Draft");
     await expect(page.getByText("1 questions", { exact: false })).toBeVisible();
@@ -329,7 +329,7 @@ test.describe.serial("TestMaker", () => {
     await generate(page, "Exam Source", 3);
 
     const assign = async (title: string, release: "Right after they submit" | "When the assignment closes", limit = "") => {
-      await page.getByRole("button", { name: "Assign online" }).click();
+      await page.getByRole("button", { name: "Assign", exact: true }).click();
       const dialog = page.getByRole("dialog");
       await dialog.getByLabel("Title students see").fill(title);
       await dialog.getByLabel("Time limit in minutes (optional)").fill(limit);
@@ -421,7 +421,7 @@ test.describe.serial("TestMaker", () => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();
     await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
-    await page.getByRole("button", { name: "Assign online" }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Title students see").fill("Quiz C");
     await dialog.getByLabel("Time limit in minutes (optional)").fill("30");
@@ -525,7 +525,7 @@ test.describe.serial("TestMaker", () => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();
     await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
-    await page.getByRole("button", { name: "Assign online" }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
     const dialog = page.getByRole("dialog");
     await dialog.getByLabel("Title students see").fill("Quiz D");
     await expect(dialog.getByLabel("Maximum students")).toHaveValue("200");
@@ -568,6 +568,96 @@ test.describe.serial("TestMaker", () => {
       })
       .toBe("2×");
     for (const p of [fay, gus]) await p.context().close();
+  });
+
+  test("paper exams: assign on paper, print versions and sheets, type answers, grade, CSV", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByRole("radio", { name: /Paper/ }).click();
+    await expect(dialog.getByRole("heading", { name: "Assign on paper" })).toBeVisible();
+    await dialog.getByLabel("Title on the exam").fill("Paper Quiz");
+    await dialog.getByLabel("Characters in an ID").fill("3");
+    await expect(dialog.getByRole("alert")).toContainText("Student ID length must be 4–12");
+    await dialog.getByLabel("Characters in an ID").fill("6");
+    await expect(dialog.getByLabel("Versions")).toHaveValue("2");
+    await dialog.getByRole("button", { name: "Create paper exam" }).click();
+
+    await expect(page.getByRole("heading", { name: "Paper Quiz" })).toBeVisible();
+    await expect(page.getByTestId("availability")).toHaveText("Paper");
+    await expect(page.getByRole("region", { name: "Share with students" })).toHaveCount(0);
+    await expect(page.getByRole("button", { name: "Open now" })).toHaveCount(0);
+
+    // Print view: a booklet and a key per version, and the requested answer sheets.
+    await page.getByLabel("Answer sheets per version").fill("2");
+    const [print] = await Promise.all([page.waitForEvent("popup"), page.getByRole("button", { name: "Open print view" }).click()]);
+    await expect(print.locator(".booklet")).toHaveCount(2);
+    await expect(print.locator("svg.sheet")).toHaveCount(4);
+    await expect(print.locator('.sheet-page[data-version="B"] svg.sheet')).toHaveCount(2);
+    await expect(print.locator(".key")).toHaveCount(2);
+    const keyB = (await print.locator('.key[data-version="B"] .keylist strong').allTextContents()).join("");
+    expect(keyB).toMatch(/^[A-E]{3}$/);
+    await print.close();
+
+    // Type Hana's sheet (version B, all correct).
+    await page.getByLabel("Student ID").fill("ab1234");
+    await page.getByLabel(/^Name/).fill("Hana");
+    await page.getByLabel("Version", { exact: true }).selectOption("B");
+    await page.getByLabel("Answers", { exact: true }).fill("AAAA");
+    await expect(page.getByRole("alert").filter({ hasText: "That's 4 answers" })).toBeVisible();
+    await page.getByLabel("Answers", { exact: true }).fill(keyB.split("").join(" "));
+    await expect(page.getByTestId("typed-preview")).toContainText("3 of 3 answered");
+    await expect(page.getByTestId("typed-preview")).toContainText("(100%)");
+    await page.getByLabel("Answers", { exact: true }).press("Enter");
+    await expect(page.getByText("Saved Hana", { exact: true })).toBeVisible();
+    await expect(page.getByLabel("Student ID")).toHaveValue("");
+    const rows = page.getByTestId("gradebook-row");
+    const hana = rows.filter({ hasText: "Hana" });
+    await expect(hana.getByTestId("row-version")).toHaveText("B · typed");
+    await expect(hana.getByText("AB1234")).toBeVisible();
+    await expect(hana.getByTestId("row-score")).toContainText("(100%)");
+
+    // A student without a name, version A, one blank.
+    await page.getByLabel("Student ID").fill("CD5678");
+    // The version stays as chosen (handy for a stack of B sheets); this one is an A.
+    await expect(page.getByLabel("Version", { exact: true })).toHaveValue("B");
+    await page.getByLabel("Version", { exact: true }).selectOption("A");
+    await page.getByLabel("Answers", { exact: true }).fill("-");
+    await expect(page.getByTestId("typed-preview")).toContainText("0 of 3 answered");
+    await page.getByRole("button", { name: "Save and next" }).click();
+    await expect(rows).toHaveCount(2);
+    await expect(rows.filter({ hasText: "CD5678" }).getByTestId("row-score")).toContainText("(0%)");
+    await expect(page.getByTestId("assignment-stats")).toHaveText("2 entered");
+
+    // Entering Hana again asks before replacing her answers.
+    await page.getByLabel("Student ID").fill("AB1234");
+    await page.getByLabel("Version", { exact: true }).selectOption("B");
+    await page.getByLabel("Answers", { exact: true }).fill("---");
+    page.once("dialog", (d) => {
+      expect(d.message()).toContain("Hana");
+      void d.accept();
+    });
+    await page.getByRole("button", { name: "Save and next" }).click();
+    await expect(hana.getByTestId("row-score")).toContainText("(0%)");
+    await expect(hana.getByText("AB1234")).toBeVisible(); // name kept
+
+    // CSV has the version and entry instead of times.
+    const [download] = await Promise.all([page.waitForEvent("download"), page.getByRole("button", { name: "Export CSV" }).click()]);
+    const csv = await readFile((await download.path())!, "utf8");
+    expect(csv).toContain("Name,Student ID,Version,Entered,Saved,Score,Possible,Percent,Q1,Q2,Q3");
+    expect(csv).toMatch(/\r\nHana,AB1234,B,Typed,/);
+    expect(csv).toMatch(/\r\n,CD5678,A,Typed,/);
+
+    // Delete an entry.
+    page.once("dialog", (d) => d.accept());
+    await page.getByRole("button", { name: "Delete CD5678" }).click();
+    await expect(rows).toHaveCount(1);
+
+    // The list shows it as a paper exam.
+    await page.getByRole("link", { name: "All assignments" }).click();
+    await expect(page.getByTestId("assignment-item").filter({ hasText: "Paper Quiz" }).getByTestId("availability")).toHaveText("Paper");
   });
 
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
