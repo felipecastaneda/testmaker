@@ -7,7 +7,7 @@ import { UserFacingError } from "./errors";
 import { loadTest } from "./tests-repo";
 import { getCourseAccess, listViewableCourses, requireCourseAccess } from "./workspace";
 import { deleteAssignmentScans } from "./scans-store";
-import { getDeliveryModes } from "./settings-repo";
+import { getDeliveryModes, getStudentSettings } from "./settings-repo";
 import { availabilityOf, DEFAULT_MAX_STUDENTS, makeJoinCode, validateAssignmentOptions } from "@/lib/assignments";
 import { paperProblem } from "@/lib/paper";
 import { totalPoints } from "@/lib/question-utils";
@@ -72,6 +72,9 @@ export function toSummary(
     totalPoints: d.totalPoints ?? 0,
     stats,
     maxStudents: d.maxStudents ?? DEFAULT_MAX_STUDENTS,
+    identity: d.identity === "google" ? "google" : "name_and_id",
+    askStudentId: d.askStudentId === true,
+    allowedDomains: Array.isArray(d.allowedDomains) ? d.allowedDomains : [],
     resultsReleased: d.resultsReleased === true,
     createdAt: d.createdAt,
     updatedAt: d.updatedAt,
@@ -125,6 +128,13 @@ export async function createAssignment(
   } else {
     checkOptions(options);
   }
+  // Who may sign in is decided now and kept with the assignment, so later settings changes
+  // never lock students out of an exam in progress.
+  const students = await getStudentSettings(orgId, test.courseId);
+  const identity = paper ? "name_and_id" : options.identity;
+  if (!paper && students.identityLocked && identity !== students.identity) {
+    throw new UserFacingError("Your organization sets how students identify themselves; it can't be changed for one exam.");
+  }
 
   const db = adminDb();
   const ref = db.collection(ASSIGNMENTS).doc();
@@ -137,6 +147,8 @@ export async function createAssignment(
 
   const base = {
     ...options,
+    identity,
+    allowedDomains: identity === "google" ? students.allowedDomains : [],
     orgId,
     courseId: test.courseId,
     testId: test.id,
@@ -213,13 +225,26 @@ export async function updateAssignment(
   const current = snap.data()!;
   // Paper exams only have a title to change: their versions and sheets may already be printed.
   if (current.delivery === "paper") patch = patch.title === undefined ? {} : { title: patch.title };
+  let identityPatch: { allowedDomains: string[] } | null = null;
+  const currentIdentity = current.identity === "google" ? "google" : "name_and_id";
+  if (patch.identity !== undefined && patch.identity !== currentIdentity) {
+    // Attempts are keyed by how students identified themselves; switching mid-exam would split them.
+    if ((await countAttempts(ref)).started > 0) {
+      throw new UserFacingError("Students have already started, so how they identify themselves can't change now.");
+    }
+    const students = await getStudentSettings(current.orgId, current.courseId);
+    if (students.identityLocked && patch.identity !== students.identity) {
+      throw new UserFacingError("Your organization sets how students identify themselves; it can't be changed for one exam.");
+    }
+    identityPatch = { allowedDomains: patch.identity === "google" ? students.allowedDomains : [] };
+  }
   const merged = {
     opensAt: patch.opensAt !== undefined ? patch.opensAt : current.opensAt ?? null,
     closesAt: patch.closesAt !== undefined ? patch.closesAt : current.closesAt ?? null,
     timeLimitMinutes: patch.timeLimitMinutes !== undefined ? patch.timeLimitMinutes : current.timeLimitMinutes ?? null,
   };
   checkOptions(merged);
-  const update = { ...patch, updatedAt: new Date().toISOString() };
+  const update = { ...patch, ...(identityPatch ?? {}), updatedAt: new Date().toISOString() };
   await ref.update(update);
   return toSummary(id, { ...current, ...update }, true, await countAttempts(ref));
 }

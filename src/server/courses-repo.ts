@@ -1,4 +1,5 @@
 import "server-only";
+import { parseDomains } from "@/lib/student-identity";
 import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import type { AuthedUser } from "./auth";
@@ -59,6 +60,10 @@ function toSummary(
       resultsRelease: resolveSetting("assignments.resultsRelease", orgSettings, courseSettings).value,
       showCorrectAnswers: resolveSetting("assignments.showCorrectAnswers", orgSettings, courseSettings).value,
       deliveryModes: resolveSetting("delivery.modes", orgSettings, courseSettings).value,
+      identity: resolveSetting("students.identity", orgSettings, courseSettings).value,
+      identityLocked: resolveSetting("students.identity", orgSettings, courseSettings).locked,
+      askStudentId: resolveSetting("students.askStudentId", orgSettings, courseSettings).value,
+      allowedDomains: parseDomains(resolveSetting("students.allowedDomains", orgSettings).value).domains,
     },
     generation: {
       allowedModels: resolveSetting("generation.allowedModels", orgSettings).value,

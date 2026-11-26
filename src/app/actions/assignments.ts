@@ -21,6 +21,8 @@ const Options = z.object({
   resultsRelease: z.enum(['immediately', 'after_close', 'manual']),
   showCorrectAnswers: z.boolean(),
   maxStudents: z.number().int().min(1, 'Allow at least 1 student.').max(MAX_STUDENTS_LIMIT, `At most ${MAX_STUDENTS_LIMIT} students.`),
+  identity: z.enum(['name_and_id', 'google']),
+  askStudentId: z.boolean(),
 });
 const Patch = Options.partial().extend({ status: z.enum(['draft', 'open', 'closed']).optional() });
 const Paper = z

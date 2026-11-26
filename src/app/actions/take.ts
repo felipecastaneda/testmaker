@@ -9,9 +9,10 @@ import * as repo from '@/server/attempts-repo';
 import { UserFacingError } from '@/server/errors';
 
 /*
- * Student-facing actions. Students have no account: these take no Firebase token and
- * never pass the professor signup gate. Each one is limited to the assignment found by
- * its join code, or to the single attempt its token names.
+ * Student-facing actions. They never pass the professor signup gate. Joining an exam that
+ * needs Google sign-in takes the student's Firebase ID token, which is only used to know who
+ * they are; everything after that uses the attempt token. Each action is limited to the
+ * assignment found by its join code, or to the single attempt its token names.
  *
  * Rate limits are per server instance and generous, because a whole school often shares
  * one IP address. The per-assignment student limit is the hard guard.
@@ -56,12 +57,19 @@ export async function getExamInfo(code: string): Promise<ActionResult<PublicAssi
   });
 }
 
-export async function joinExam(code: string, name: string, studentId: string): Promise<ActionResult<JoinResult>> {
+/** Join (or, for signed-in students, resume) an exam. `idToken`: a Firebase ID token when the exam needs sign-in. */
+export async function joinExam(code: string, name: string, studentId: string, idToken: string | null = null): Promise<ActionResult<JoinResult>> {
   return run(async (ip) => {
     const parsedCode = Code.parse(code);
     if (!limits.join.allow(`${ip}:${parsedCode.toUpperCase()}`)) throw new UserFacingError(TOO_MANY);
     const userAgent = (await headers()).get('user-agent') ?? '';
-    return repo.joinAssignment(parsedCode, z.string().max(200).parse(name), z.string().max(200).parse(studentId), userAgent);
+    return repo.joinAssignment(
+      parsedCode,
+      z.string().max(200).parse(name),
+      z.string().max(200).parse(studentId),
+      userAgent,
+      z.string().max(5_000).nullable().parse(idToken)
+    );
   });
 }
 

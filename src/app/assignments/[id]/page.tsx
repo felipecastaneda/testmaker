@@ -18,6 +18,7 @@ import { deleteAssignment, getAssignment, updateAssignment } from "@/app/actions
 import { toast } from "@/hooks/use-toast";
 import { useCourses } from "@/hooks/use-courses";
 import { formatPoints } from "@/lib/question-utils";
+import { domainHint } from "@/lib/student-identity";
 import type { AssignmentOptions, AssignmentStatus, AssignmentSummary } from "@/lib/types";
 
 const PAPER_HELP = "Print the exam and answer sheets, then enter each student's answers to grade them.";
@@ -96,7 +97,9 @@ export default function AssignmentPage() {
 
   const a = assignment;
   const link = a && typeof window !== "undefined" ? `${window.location.origin}/take/${a.joinCode}` : "";
-  const courseName = a ? overview?.courses.find((c) => c.id === a.courseId)?.name : undefined;
+  const course = a ? overview?.courses.find((c) => c.id === a.courseId) : undefined;
+  const courseName = course?.name;
+  const courseDefaults = course?.assignmentDefaults;
 
   return (
     <div className="flex flex-col min-h-screen bg-slate-50">
@@ -199,7 +202,12 @@ export default function AssignmentPage() {
               {editing ? (
                 <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4" aria-label="Edit assignment">
                   <h2 className="text-lg font-semibold text-slate-800">Edit</h2>
-                  <AssignmentForm initial={a} onChange={(options, problem) => setDraft({ options, problem })} />
+                  <AssignmentForm
+                    initial={a}
+                    identityLocked={courseDefaults?.identityLocked}
+                    allowedDomains={a.identity === "google" ? a.allowedDomains : courseDefaults?.allowedDomains}
+                    onChange={(options, problem) => setDraft({ options, problem })}
+                  />
                   {draft?.problem && <p className="text-sm text-rose-600" role="alert">{draft.problem}</p>}
                   <p className="text-xs text-muted-foreground">
                     Changes apply to students who start from now on. Questions can&apos;t be edited here: they&apos;re a frozen copy of the test.
@@ -224,6 +232,14 @@ export default function AssignmentPage() {
                     <Detail label="Opens" value={a.opensAt ? formatWhen(a.opensAt) : "When you open it"} />
                     <Detail label="Closes" value={a.closesAt ? formatWhen(a.closesAt) : "When you close it"} />
                     <Detail label="Time limit" value={a.timeLimitMinutes ? `${a.timeLimitMinutes} minutes` : "None"} />
+                    <Detail
+                      label="Students"
+                      value={
+                        a.identity === "google"
+                          ? `Sign in with Google${a.allowedDomains.length ? ` (${domainHint(a.allowedDomains)})` : ""}${a.askStudentId ? " + student ID" : ""}`
+                          : "Name and student ID"
+                      }
+                    />
                     <Detail label="Attempts" value="1 per student" />
                     <Detail label="Results" value={RESULTS_RELEASE_LABELS[a.resultsRelease]} />
                     <Detail label="Correct answers" value={a.showCorrectAnswers ? "Shown with results" : "Not shown"} />

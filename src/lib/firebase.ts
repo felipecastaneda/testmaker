@@ -3,7 +3,7 @@ import { connectAuthEmulator, getAuth, type Auth } from "firebase/auth";
 
 // The browser only talks to Firebase Auth. All Firestore access happens on the
 // server (src/server) through firebase-admin, behind auth + ownership checks.
-const firebaseConfig = {
+export const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
   authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
   projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,

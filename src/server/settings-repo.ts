@@ -4,6 +4,7 @@ import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { getOrgRole, listViewableCourses, requireCourseAccess } from "./workspace";
 import { isOrgAdmin } from "@/lib/permissions";
+import { parseDomains } from "@/lib/student-identity";
 import { lockedKeys, resolveSetting, validateSettingsPatch, type SettingsPatch, type StoredSettings } from "@/lib/settings/resolve";
 import { isSettingKey } from "@/lib/settings/registry";
 import type { SettingsOverview } from "@/lib/types";
@@ -127,6 +128,20 @@ export async function getDeliveryModes(orgId: string, courseId: string) {
   const db = adminDb();
   const [org, course] = await db.getAll(db.collection(ORGS).doc(orgId), db.collection(COURSES).doc(courseId));
   return resolveSetting("delivery.modes", org.get("settings") as StoredSettings | undefined, course.get("settings") as StoredSettings | undefined).value;
+}
+
+/** Student identity settings for a course (online exams). Caller must have checked course access. */
+export async function getStudentSettings(orgId: string, courseId: string) {
+  const db = adminDb();
+  const [org, course] = await db.getAll(db.collection(ORGS).doc(orgId), db.collection(COURSES).doc(courseId));
+  const orgSettings = org.get("settings") as StoredSettings | undefined;
+  const courseSettings = course.get("settings") as StoredSettings | undefined;
+  const identity = resolveSetting("students.identity", orgSettings, courseSettings);
+  return {
+    identity: identity.value,
+    identityLocked: identity.locked,
+    allowedDomains: parseDomains(resolveSetting("students.allowedDomains", orgSettings).value).domains,
+  };
 }
 
 /** Settings that shape generation in a course. Caller must have checked course access. */

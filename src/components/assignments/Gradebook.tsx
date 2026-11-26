@@ -197,6 +197,11 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                     <td className="px-3 py-2">
                       <span className="font-medium text-slate-800">{attempt.studentName || attempt.studentId}</span>
                       {attempt.studentName && <span className="block text-xs text-muted-foreground">{attempt.studentId}</span>}
+                      {attempt.email && attempt.email !== attempt.studentId && (
+                        <span className="block text-xs text-muted-foreground" data-testid="row-email">
+                          {attempt.email}
+                        </span>
+                      )}
                     </td>
                     {isPaper ? (
                       <td className="px-3 py-2 text-xs whitespace-nowrap" data-testid="row-version">

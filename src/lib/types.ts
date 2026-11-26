@@ -1,3 +1,4 @@
+import type { StudentIdentity } from "./student-identity";
 export type QuestionType = "multiple_choice" | "true_false";
 export type Difficulty = "easy" | "medium" | "hard";
 export type DifficultySetting = Difficulty | "mixed";
@@ -102,6 +103,12 @@ export interface CourseSummary {
     showCorrectAnswers: boolean;
     /** Online, paper, or both (setting `delivery.modes`). */
     deliveryModes: DeliveryModes;
+    identity: StudentIdentity;
+    /** The org locked the identity method: professors can't change it per exam. */
+    identityLocked: boolean;
+    askStudentId: boolean;
+    /** Google sign-in: only these email domains (empty = any account). */
+    allowedDomains: string[];
   };
   /** Effective generation settings for this course. */
   generation: {
@@ -183,6 +190,10 @@ export interface AssignmentOptions {
   showCorrectAnswers: boolean;
   /** At most this many students can start (guards against joins with made-up IDs). */
   maxStudents: number;
+  /** Online exams: how students identify themselves (typed name + ID, or a Google account). */
+  identity: StudentIdentity;
+  /** With sign-in, also ask for the student ID. */
+  askStudentId: boolean;
 }
 
 export type Delivery = "online" | "paper";
@@ -203,6 +214,8 @@ export interface AssignmentSummary extends AssignmentOptions {
   delivery: Delivery;
   /** Only for paper assignments. */
   paper: PaperOptions | null;
+  /** Google sign-in: only these email domains can join (empty = any account). */
+  allowedDomains: string[];
   orgId: string;
   courseId: string;
   testId: string;

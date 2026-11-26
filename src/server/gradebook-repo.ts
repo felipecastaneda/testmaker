@@ -56,6 +56,7 @@ export async function getGradebook(user: AuthedUser, id: string): Promise<Gradeb
         variant: d.get("variant") ?? null,
         entry: d.get("entry") ?? null,
         hasScan: !!d.get("scan"),
+        email: d.get("email") ?? null,
       })
     ),
   };

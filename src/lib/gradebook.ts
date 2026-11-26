@@ -30,6 +30,8 @@ export interface GradebookAttempt {
   grade: AttemptGrade | null;
   /** Times the student left the exam page (informational). */
   focusLosses: number;
+  /** Signed-in students: their verified email. */
+  email: string | null;
   /** Paper attempts were typed (or scanned) in by the professor. */
   source: "online" | "paper";
   /** Paper version ("A".."D"), or null online. */
@@ -107,9 +109,12 @@ function csvCell(value: string | number | null): string {
  */
 export function gradebookCsv(view: GradebookView): string {
   if (view.assignment.delivery === "paper") return paperCsv(view);
+  // Signed-in students: their verified email, right after the ID.
+  const withEmail = view.assignment.identity === "google";
   const header = [
     "Name",
     "Student ID",
+    ...(withEmail ? ["Email"] : []),
     "Status",
     "Started",
     "Submitted",
@@ -127,6 +132,7 @@ export function gradebookCsv(view: GradebookView): string {
       return [
         a.studentName,
         a.studentId,
+        ...(withEmail ? [a.email] : []),
         a.status === "in_progress" ? "In progress" : a.submittedBy === "deadline" ? "Submitted (time/close)" : "Submitted",
         a.startedAt,
         a.submittedAt,
