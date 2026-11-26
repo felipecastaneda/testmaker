@@ -1,5 +1,6 @@
 import type { AttemptGrade } from "./grading";
 import { percentage } from "./grading";
+import type { ClassListEntry } from "./paper";
 import type { AssignmentSummary } from "./types";
 
 /** A question as the professor sees it in the gradebook (includes the key). */
@@ -42,6 +43,8 @@ export interface GradebookView {
   assignment: AssignmentSummary;
   questions: GradebookQuestion[];
   attempts: GradebookAttempt[];
+  /** Paper exams: the optional class list (empty when none). */
+  classList: ClassListEntry[];
 }
 
 export interface QuestionStats {
@@ -162,4 +165,22 @@ function paperCsv(view: GradebookView): string {
 
 function toCsv(rows: (string | number | null)[][]): string {
   return "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+}
+
+/** Paper exams: average % per version, to spot a version that turned out harder. */
+export function versionAverages(attempts: GradebookAttempt[]): { variant: string; count: number; average: number }[] {
+  const byVersion = new Map<string, GradebookAttempt[]>();
+  for (const a of attempts) {
+    if (!a.variant || a.status !== "submitted" || !a.grade) continue;
+    byVersion.set(a.variant, [...(byVersion.get(a.variant) ?? []), a]);
+  }
+  return [...byVersion.entries()]
+    .sort(([x], [y]) => x.localeCompare(y))
+    .map(([variant, list]) => ({ variant, count: list.length, average: averagePercent(list) ?? 0 }));
+}
+
+/** Students on the class list with no answers entered yet. */
+export function missingStudents(classList: ClassListEntry[], attempts: GradebookAttempt[]): ClassListEntry[] {
+  const entered = new Set(attempts.map((a) => a.studentId.replace(/\s+/g, "").toUpperCase()));
+  return classList.filter((e) => !entered.has(e.id));
 }

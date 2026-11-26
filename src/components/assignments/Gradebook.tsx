@@ -12,6 +12,8 @@ import { toast } from "@/hooks/use-toast";
 import { downloadBlob, fileSafeName } from "@/lib/exporters";
 import {
   averagePercent,
+  missingStudents,
+  versionAverages,
   gradebookCsv,
   minutesTaken,
   questionStats,
@@ -134,6 +136,7 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
           </Button>
         </div>
       </div>
+      {isPaper && <PaperSummary attempts={attempts} classList={view.classList} />}
       {canRelease && (
         <p className="text-xs text-muted-foreground">
           {a.resultsReleased
@@ -390,5 +393,34 @@ function ScanDialog({ assignmentId, attempt, onClose }: { assignmentId: string; 
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/** Paper exams: averages per version, and who on the class list has no answers yet. */
+function PaperSummary({ attempts, classList }: { attempts: GradebookAttempt[]; classList: GradebookView["classList"] }) {
+  const versions = versionAverages(attempts);
+  const missing = missingStudents(classList, attempts);
+  if (versions.length < 2 && !classList.length) return null;
+  return (
+    <div className="text-xs text-slate-600 space-y-1">
+      {versions.length > 1 && (
+        <p data-testid="version-averages">
+          By version: {versions.map((v) => `${v.variant} ${v.average}% (${v.count})`).join(" · ")}
+        </p>
+      )}
+      {classList.length > 0 &&
+        (missing.length ? (
+          <details>
+            <summary className="cursor-pointer text-amber-700" data-testid="missing-students">
+              {missing.length} of {classList.length} students on the class list have no answers yet
+            </summary>
+            <p className="mt-1">{missing.map((m) => (m.name ? `${m.name} (${m.id})` : m.id)).join(", ")}</p>
+          </details>
+        ) : (
+          <p className="text-emerald-700" data-testid="missing-students">
+            Everyone on the class list ({classList.length}) has answers entered.
+          </p>
+        ))}
+    </div>
   );
 }

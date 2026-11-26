@@ -5,7 +5,17 @@ import { attemptIdFor, readQuestions } from "./attempts-repo";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { cleanName, gradeAttempt, studentKeyOf } from "@/lib/grading";
-import { lettersToAnswers, normalizePaperId, paperVariants, versionLabels, type PaperExam, type PaperLetters } from "@/lib/paper";
+import type { DocumentReference } from "firebase-admin/firestore";
+import {
+  lettersToAnswers,
+  MAX_CLASS_LIST,
+  normalizePaperId,
+  paperVariants,
+  versionLabels,
+  type ClassListEntry,
+  type PaperExam,
+  type PaperLetters,
+} from "@/lib/paper";
 import type { PaperOptions, QuestionData } from "@/lib/types";
 
 /*
@@ -19,6 +29,33 @@ import type { PaperOptions, QuestionData } from "@/lib/types";
 
 const ATTEMPTS = "attempts";
 const NOT_PAPER = "This isn't a paper exam.";
+
+/** assignments/{id}/meta/classList = { entries: [{ id, name }], updatedAt }: optional, paper exams only. */
+const classListRef = (assignment: DocumentReference) => assignment.collection("meta").doc("classList");
+
+export async function readClassList(assignment: DocumentReference): Promise<ClassListEntry[]> {
+  return ((await classListRef(assignment).get()).get("entries") as ClassListEntry[] | undefined) ?? [];
+}
+
+/** Replace the class list (an empty list removes it). Returns the stored entries. */
+export async function setClassList(user: AuthedUser, id: string, entries: ClassListEntry[]): Promise<ClassListEntry[]> {
+  const { ref, snap } = await requireEditable(user, id);
+  const paper = paperOf(snap.data());
+  if (!paper) throw new UserFacingError(NOT_PAPER);
+  if (entries.length > MAX_CLASS_LIST) throw new UserFacingError(`A class list can have at most ${MAX_CLASS_LIST} students.`);
+  const clean: ClassListEntry[] = [];
+  const seen = new Set<string>();
+  for (const e of entries) {
+    const n = normalizePaperId(e.id, paper);
+    if ("error" in n) throw new UserFacingError(`${e.id}: ${n.error}`);
+    if (seen.has(n.id)) continue;
+    seen.add(n.id);
+    clean.push({ id: n.id, name: cleanName(e.name).slice(0, 120) });
+  }
+  if (clean.length === 0) await classListRef(ref).delete();
+  else await classListRef(ref).set({ entries: clean, updatedAt: new Date().toISOString(), updatedBy: user.uid });
+  return clean;
+}
 
 function paperOf(d: FirebaseFirestore.DocumentData | undefined): (PaperOptions & { seed: string }) | null {
   return d?.delivery === "paper" && d.paper ? d.paper : null;
@@ -40,6 +77,7 @@ export async function getPaperExam(user: AuthedUser, id: string): Promise<PaperE
     paper: { versions: paper.versions, idLength: paper.idLength, idCharset: paper.idCharset },
     seed: paper.seed,
     questions,
+    classList: await readClassList(ref),
   };
 }
 
@@ -104,7 +142,11 @@ export async function savePaperAnswers(
   const grade = gradeAttempt(stored, answers);
   const now = new Date().toISOString();
   // Keep a name typed earlier when this entry has none (e.g. a re-entry by ID only).
-  const studentName = cleanName(input.studentName).slice(0, 120) || (existing.get("studentName") as string | undefined) || "";
+  const studentName =
+    cleanName(input.studentName).slice(0, 120) ||
+    (existing.get("studentName") as string | undefined) ||
+    (await readClassList(ref)).find((e) => e.id === studentId)?.name ||
+    "";
 
   let scanInfo: Record<string, unknown> | null = null;
   if (scan) {

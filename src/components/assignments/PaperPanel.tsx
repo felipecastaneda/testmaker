@@ -1,18 +1,26 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Keyboard, Loader2, Printer } from "lucide-react";
-import { getPaperExam, savePaperAnswers } from "@/app/actions/assignments";
+import { Keyboard, ListChecks, Loader2, Printer } from "lucide-react";
+import { getPaperExam, savePaperAnswers, setClassList } from "@/app/actions/assignments";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { toast } from "@/hooks/use-toast";
 import { gradeAttempt, percentage } from "@/lib/grading";
-import { lettersToAnswers, normalizePaperId, paperVariants, parseTypedAnswers, type PaperExam } from "@/lib/paper";
+import {
+  classListText,
+  lettersToAnswers,
+  normalizePaperId,
+  paperVariants,
+  parseClassList,
+  parseTypedAnswers,
+  type ClassListEntry,
+  type PaperExam,
+} from "@/lib/paper";
 import { MAX_SHEETS_PER_VERSION, paperPrintHtml } from "@/lib/paper-print";
 import type { AssignmentSummary } from "@/lib/types";
 import { PaperScanPanel } from "./PaperScanPanel";
-
 
 const selectClass = "h-10 px-3 rounded-md border border-input bg-white text-sm";
 
@@ -48,6 +56,16 @@ export function PaperPanel({ assignment: a, courseName, onSaved }: PaperPanelPro
   return (
     <>
       <PrintSection assignment={a} courseName={courseName} exam={exam} variants={variants} />
+      {a.canEdit && (
+        <ClassListSection
+          assignment={a}
+          exam={exam}
+          onSaved={(classList) => {
+            setExam({ ...exam, classList });
+            onSaved();
+          }}
+        />
+      )}
       {a.canEdit && <PaperScanPanel assignment={a} exam={exam} variants={variants} onSaved={onSaved} />}
       {a.canEdit && <TypeAnswersSection assignment={a} exam={exam} variants={variants} onSaved={onSaved} />}
     </>
@@ -133,6 +151,8 @@ function TypeAnswersSection({ assignment: a, exam, variants, onSaved }: { assign
   const variant = variants.find((v) => v.label === version) ?? variants[0];
   const parsed = parseTypedAnswers(answers, variant);
   const id = normalizePaperId(studentId, exam.paper);
+  const listed = "id" in id ? exam.classList.find((e) => e.id === id.id) : undefined;
+  const notListed = exam.classList.length > 0 && "id" in id && !listed;
   const answered = "letters" in parsed ? parsed.letters.filter((l) => l !== null).length : 0;
   const preview = "letters" in parsed ? gradeAttempt(exam.questions, lettersToAnswers(variant, parsed.letters)) : null;
   const problem = studentId.trim() && "error" in id ? id.error : "error" in parsed ? parsed.error : null;
@@ -193,12 +213,28 @@ function TypeAnswersSection({ assignment: a, exam, variants, onSaved }: { assign
             className="font-mono uppercase"
             onChange={(e) => setStudentId(e.target.value)}
           />
+          {listed ? (
+            <span className="text-xs text-emerald-700" data-testid="class-list-match">
+              {listed.name || "On the class list"}
+            </span>
+          ) : notListed ? (
+            <span className="text-xs text-amber-700" data-testid="class-list-match">
+              Not on the class list: check the ID
+            </span>
+          ) : null}
         </div>
         <div className="space-y-1">
           <label htmlFor="paper-student-name" className="text-sm font-medium">
             Name <span className="font-normal text-muted-foreground">(optional)</span>
           </label>
-          <Input id="paper-student-name" value={name} maxLength={120} autoComplete="off" onChange={(e) => setName(e.target.value)} />
+          <Input
+            id="paper-student-name"
+            value={name}
+            maxLength={120}
+            autoComplete="off"
+            placeholder={listed?.name ?? ""}
+            onChange={(e) => setName(e.target.value)}
+          />
         </div>
         <div className="space-y-1">
           <label htmlFor="paper-version" className="text-sm font-medium">
@@ -241,6 +277,93 @@ function TypeAnswersSection({ assignment: a, exam, variants, onSaved }: { assign
           </Button>
         </div>
       </form>
+    </section>
+  );
+}
+
+function ClassListSection({ assignment: a, exam, onSaved }: { assignment: AssignmentSummary; exam: PaperExam; onSaved: (list: ClassListEntry[]) => void }) {
+  const { callAction } = useAuth();
+  const [editing, setEditing] = useState(false);
+  const [text, setText] = useState("");
+  const [busy, setBusy] = useState(false);
+  const parsed = parseClassList(text, exam.paper);
+  const count = exam.classList.length;
+
+  const save = async (entries: ClassListEntry[]) => {
+    setBusy(true);
+    const result = await callAction((t) => setClassList(t, a.id, entries));
+    setBusy(false);
+    if (!result.success || !result.data) {
+      toast({ title: "Couldn't save the class list", description: result.error, variant: "destructive" });
+      return;
+    }
+    toast({ title: result.data.length ? `Class list saved (${result.data.length} students)` : "Class list removed" });
+    setEditing(false);
+    onSaved(result.data);
+  };
+
+  return (
+    <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-3" aria-label="Class list">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <ListChecks className="h-5 w-5 text-slate-500" />
+          <h2 className="text-lg font-semibold text-slate-800">Class list</h2>
+          <span className="text-xs text-muted-foreground" data-testid="class-list-count">
+            {count ? `${count} students` : "Optional"}
+          </span>
+        </div>
+        {!editing && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setText(classListText(exam.classList));
+              setEditing(true);
+            }}
+          >
+            {count ? "Edit" : "Add class list"}
+          </Button>
+        )}
+      </div>
+      <p className="text-xs text-muted-foreground">
+        With a class list, names fill in from the student ID, IDs that aren&apos;t on the list are flagged (usually a misread or mistyped ID),
+        and the gradebook shows who has no answers yet.
+      </p>
+      {editing && (
+        <div className="space-y-2">
+          <label htmlFor="class-list" className="text-sm font-medium">
+            One student per line: ID, name (paste from a spreadsheet works too)
+          </label>
+          <textarea
+            id="class-list"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            rows={8}
+            spellCheck={false}
+            placeholder={"AB1234, Hana Kim\nCD5678, Juan Pérez"}
+            className="w-full rounded-md border border-input p-3 text-sm font-mono"
+          />
+          <p className="text-xs text-slate-600" data-testid="class-list-preview">
+            {parsed.entries.length} students
+            {parsed.problems.length ? ` · ${parsed.problems.length} ${parsed.problems.length === 1 ? "line" : "lines"} skipped` : ""}
+          </p>
+          {parsed.problems.length > 0 && (
+            <ul className="text-xs text-amber-700 list-disc pl-5">
+              {parsed.problems.slice(0, 5).map((p) => (
+                <li key={p}>{p}</li>
+              ))}
+            </ul>
+          )}
+          <div className="flex gap-2">
+            <Button onClick={() => save(parsed.entries)} disabled={busy}>
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Save class list"}
+            </Button>
+            <Button variant="ghost" onClick={() => setEditing(false)} disabled={busy}>
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

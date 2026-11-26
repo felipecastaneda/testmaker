@@ -740,6 +740,37 @@ test.describe.serial("TestMaker", () => {
     await expect(student).toHaveCount(0);
   });
 
+  test("paper exams: class list fills names, flags unknown IDs, shows who's missing; averages by version", async ({ page }) => {
+    await signIn(page, E2E.teacher);
+    await page.goto("/assignments");
+    await page.getByTestId("assignment-item").filter({ hasText: "Paper Quiz" }).click();
+    await expect(page.getByTestId("class-list-count")).toHaveText("Optional");
+
+    await page.getByRole("button", { name: "Add class list" }).click();
+    await page.getByLabel(/One student per line/).fill("Student ID, Name\nAB1234, Hana Kim\nGH3456, Ivo Petrov\nJun Ito; JK7890\nnot a student");
+    await expect(page.getByTestId("class-list-preview")).toHaveText("3 students · 1 line skipped");
+    await page.getByRole("button", { name: "Save class list" }).click();
+    await expect(page.getByTestId("class-list-count")).toHaveText("3 students");
+    // Hana (AB1234) already has answers from the earlier test.
+    await expect(page.getByTestId("missing-students")).toHaveText("2 of 3 students on the class list have no answers yet");
+
+    // Typing an ID shows the name from the list; the server fills it in.
+    await page.getByLabel("Student ID").fill("gh3456");
+    await expect(page.getByTestId("class-list-match")).toHaveText("Ivo Petrov");
+    await page.getByLabel("Version", { exact: true }).selectOption("A");
+    await page.getByLabel("Answers", { exact: true }).fill("-");
+    await page.getByRole("button", { name: "Save and next" }).click();
+    await expect(page.getByTestId("gradebook-row").filter({ hasText: "Ivo Petrov" })).toBeVisible();
+    await expect(page.getByTestId("missing-students")).toHaveText("1 of 3 students on the class list have no answers yet");
+
+    // An ID that isn't on the list is called out.
+    await page.getByLabel("Student ID").fill("ZZ9999");
+    await expect(page.getByTestId("class-list-match")).toHaveText("Not on the class list: check the ID");
+
+    // Hana took B and Ivo took A.
+    await expect(page.getByTestId("version-averages")).toHaveText("By version: A 0% (1) · B 0% (1)");
+  });
+
   test("courses: create, save into, move, archive and delete", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();

@@ -60,7 +60,7 @@ describe("questionStats", () => {
 });
 
 describe("gradebookCsv", () => {
-  const view: GradebookView = { assignment: {} as AssignmentSummary, questions, attempts };
+  const view: GradebookView = { assignment: {} as AssignmentSummary, questions, attempts, classList: [] };
   const csv = gradebookCsv(view);
   const lines = csv.replace(/^﻿/, "").trimEnd().split("\r\n");
 
@@ -83,5 +83,21 @@ describe("gradebookCsv", () => {
     });
     expect(tricky).toContain('"Pérez, ""Juan"""');
     expect(tricky).toContain("'=HYPERLINK(1)");
+  });
+});
+
+describe("paper helpers", () => {
+  it("averages per version and lists students without answers", async () => {
+    const { versionAverages, missingStudents } = await import("@/lib/gradebook");
+    const paper = [
+      attempt({ studentId: "A1", answers: { q1: "Mitochondria", q2: "True" }, variant: "A", source: "paper" }),
+      attempt({ studentId: "B1", answers: { q1: "Nucleus" }, variant: "B", source: "paper" }),
+      attempt({ studentId: "B2", answers: { q1: "Mitochondria" }, variant: "B", source: "paper" }),
+    ];
+    expect(versionAverages(paper)).toEqual([
+      { variant: "A", count: 1, average: 100 },
+      { variant: "B", count: 2, average: 34 }, // 0% and 67%
+    ]);
+    expect(missingStudents([{ id: "A1", name: "Ana" }, { id: "C1", name: "Cy" }], paper)).toEqual([{ id: "C1", name: "Cy" }]);
   });
 });

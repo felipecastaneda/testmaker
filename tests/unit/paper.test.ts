@@ -183,6 +183,7 @@ describe("paper gradebook CSV", () => {
       assignment: { delivery: "paper" } as AssignmentSummary,
       questions: keys.map((k) => ({ id: k.id, question: k.question, correctAnswer: k.correctAnswer, options: [], points: 1, accepted: [] })),
       attempts: [attempt],
+      classList: [],
     });
     const lines = csv.replace(/^﻿/, "").trimEnd().split("\r\n");
     expect(lines[0]).toBe("Name,Student ID,Version,Entered,Saved,Score,Possible,Percent,Q1,Q2,Q3,Q4");
@@ -193,5 +194,29 @@ describe("paper gradebook CSV", () => {
 describe("paper keys", () => {
   it("refuses a true/false question whose answer isn't True or False", () => {
     expect(paperProblem([q(1, { type: "true_false", correctAnswer: "Yes", distractors: ["False"] })], "digits")).toMatch(/isn't one of its options/);
+  });
+});
+
+describe("class lists", () => {
+  const letters = { idLength: 8, idCharset: "letters_digits" as const };
+  it("reads ID-first and name-first lines, skips a header, reports problems", async () => {
+    const { parseClassList, classListText } = await import("@/lib/paper");
+    const { entries, problems } = parseClassList(
+      ["Student ID, Name", "ab1234, Hana Kim", "Pérez, Juan;CD5678", "Ana\tEF9012", "", "AB1234, again", "not an id at all, x"].join("\n"),
+      letters
+    );
+    expect(entries).toEqual([
+      { id: "AB1234", name: "Hana Kim" },
+      { id: "CD5678", name: "Pérez, Juan" },
+      { id: "EF9012", name: "Ana" },
+    ]);
+    expect(problems).toHaveLength(2);
+    expect(problems[0]).toMatch(/listed twice/);
+    expect(classListText(entries)).toBe("AB1234, Hana Kim\nCD5678, Pérez, Juan\nEF9012, Ana");
+  });
+
+  it("checks IDs against the exam's digit-only setting", async () => {
+    const { parseClassList } = await import("@/lib/paper");
+    expect(parseClassList("123456, Ana\nAB12, Bo", { idLength: 6, idCharset: "digits" }).entries).toEqual([{ id: "123456", name: "Ana" }]);
   });
 });

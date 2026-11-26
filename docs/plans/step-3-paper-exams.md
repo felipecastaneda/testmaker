@@ -1,6 +1,6 @@
 # Step 3: Paper exams (print, scan or type answers, grade)
 
-Status: parts 1–2 built (2026-11-26) · Written 2026-11-25 · Builds on step 2 (assignments, grading, gradebook)
+Status: parts 1–3 built (2026-11-26) · Written 2026-11-25 · Builds on step 2 (assignments, grading, gradebook)
 
 ## Goal
 
@@ -168,7 +168,7 @@ there's no scanner.
 |---|---|
 | 1 | `delivery.modes` setting; paper assignments (data model, assign dialog, page); seeded versions; print booklets + answer keys + answer sheets; **typed** answers → graded paper attempts; gradebook Version/Source columns. Usable end to end without scanning. |
 | 2 | **Scanning**: OMR reader (worker, unit-tested on synthetic sheets), photo + PDF upload, review screen with flags, bulk save. e2e: print a sheet, fill it programmatically, upload, check the gradebook. |
-| 3 | Polish from real use: sheet-print tuning (margins/printers), duplicate/replace handling, "sheet from another exam" errors, per-version item analysis, a scan accuracy test set from real photos. |
+| 3 | Fewer mistakes, before real-world feedback: an optional **class list** (paste "ID, name") per paper exam that fills in names, flags scanned or typed IDs that aren't on it (catches misread IDs), and shows who has no answers yet; **per-version averages** in the gradebook. Print tuning and a real-photo accuracy set wait for real use. |
 
 Part 2 also opens Cloud Storage for the server only (rules stay deny-all) and adds the Storage
 emulator to the e2e suite.
