@@ -10,6 +10,8 @@ import { useAuth } from "@/components/auth/AuthProvider";
 import { AssignmentForm, RESULTS_RELEASE_LABELS } from "@/components/assignments/AssignmentForm";
 import { AvailabilityBadge, formatWhen } from "@/components/assignments/AvailabilityBadge";
 import { Gradebook } from "@/components/assignments/Gradebook";
+import { PaperPanel } from "@/components/assignments/PaperPanel";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { deleteAssignment, getAssignment, updateAssignment } from "@/app/actions/assignments";
@@ -17,6 +19,16 @@ import { toast } from "@/hooks/use-toast";
 import { useCourses } from "@/hooks/use-courses";
 import { formatPoints } from "@/lib/question-utils";
 import type { AssignmentOptions, AssignmentStatus, AssignmentSummary } from "@/lib/types";
+
+const PAPER_HELP = "Print the exam and answer sheets, then enter each student's answers to grade them.";
+
+function PaperBadge() {
+  return (
+    <Badge variant="outline" className="text-[11px] bg-amber-50 text-amber-800 border-amber-200" data-testid="availability">
+      Paper
+    </Badge>
+  );
+}
 
 const AVAILABILITY_HELP = {
   draft: "Students can't start yet. Open it when you're ready.",
@@ -37,6 +49,7 @@ export default function AssignmentPage() {
   const [draft, setDraft] = useState<{ options: AssignmentOptions | null; problem: string | null } | null>(null);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState<"link" | "code" | null>(null);
+  const [entered, setEntered] = useState(0);
 
   const load = useCallback(async () => {
     const result = await callAction((t) => getAssignment(t, id));
@@ -107,17 +120,17 @@ export default function AssignmentPage() {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <h1 className="text-3xl font-bold font-headline text-slate-800">{a.title}</h1>
-                    <AvailabilityBadge availability={a.availability} />
+                    {a.delivery === "paper" ? <PaperBadge /> : <AvailabilityBadge availability={a.availability} />}
                   </div>
                   <p className="text-sm text-muted-foreground">
                     {courseName ? `${courseName} · ` : ""}
                     {a.questionCount} questions · {formatPoints(a.totalPoints)} · from test version {a.testVersion}
                   </p>
-                  <p className="text-sm text-slate-600">{AVAILABILITY_HELP[a.availability]}</p>
+                  <p className="text-sm text-slate-600">{a.delivery === "paper" ? PAPER_HELP : AVAILABILITY_HELP[a.availability]}</p>
                 </div>
                 {a.canEdit && (
                   <div className="flex flex-wrap gap-2">
-                    {a.status !== "open" ? (
+                    {a.delivery === "paper" ? null : a.status !== "open" ? (
                       <Button onClick={() => save({ status: "open" }, "Assignment opened")} disabled={busy}>
                         <Play className="h-4 w-4 mr-1" /> Open now
                       </Button>
@@ -126,9 +139,11 @@ export default function AssignmentPage() {
                         <Square className="h-4 w-4 mr-1" /> Close now
                       </Button>
                     )}
-                    <Button variant="outline" onClick={() => { setEditing(true); setDraft(null); }} disabled={busy || editing}>
-                      <Pencil className="h-4 w-4 mr-1" /> Edit
-                    </Button>
+                    {a.delivery !== "paper" && (
+                      <Button variant="outline" onClick={() => { setEditing(true); setDraft(null); }} disabled={busy || editing}>
+                        <Pencil className="h-4 w-4 mr-1" /> Edit
+                      </Button>
+                    )}
                     <Button variant="ghost" className="text-slate-500 hover:text-rose-600" onClick={remove} disabled={busy}>
                       <Trash2 className="h-4 w-4 mr-1" /> Delete
                     </Button>
@@ -136,6 +151,19 @@ export default function AssignmentPage() {
                 )}
               </div>
 
+              {a.delivery === "paper" && a.paper ? (
+                <>
+                  <section className="bg-white rounded-2xl border border-slate-100 p-6" aria-label="Settings">
+                    <dl className="grid sm:grid-cols-3 gap-x-6 gap-y-3 text-sm">
+                      <Detail label="Versions" value={a.paper.versions === 1 ? "1 (same for everyone)" : `${a.paper.versions} (${"ABCD".slice(0, a.paper.versions).split("").join(", ")})`} />
+                      <Detail label="Student IDs" value={`${a.paper.idLength} ${a.paper.idCharset === "digits" ? "digits" : "letters or digits"}`} />
+                      <Detail label="Answer order" value={a.paper.versions > 1 ? "Different in each version" : "As printed"} />
+                    </dl>
+                  </section>
+                  <PaperPanel assignment={a} courseName={courseName} onSaved={() => setEntered((n) => n + 1)} />
+                </>
+              ) : (
+              <>
               <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4" aria-label="Share with students">
                 <h2 className="text-lg font-semibold text-slate-800">Share with students</h2>
                 <div className="grid sm:grid-cols-[1fr_auto] gap-4 items-end">
@@ -204,12 +232,14 @@ export default function AssignmentPage() {
                   </dl>
                 </section>
               )}
+              </>
+              )}
 
               <section className="bg-white rounded-2xl border border-slate-100 p-6 space-y-3" aria-label="Students">
                 <div className="flex items-baseline justify-between gap-2">
                   <h2 className="text-lg font-semibold text-slate-800">Grades</h2>
                   <p className="text-xs text-slate-500" data-testid="assignment-stats">
-                    {a.stats.started} started · {a.stats.submitted} submitted
+                    {a.delivery === "paper" ? `${a.stats.submitted} entered` : `${a.stats.started} started · ${a.stats.submitted} submitted`}
                   </p>
                 </div>
                 {!a.canEdit && (
@@ -217,7 +247,7 @@ export default function AssignmentPage() {
                     <Lock className="h-3 w-3" /> You can view this assignment but not change it.
                   </p>
                 )}
-                <Gradebook key={a.status} assignmentId={a.id} onAssignment={setAssignment} />
+                <Gradebook key={`${a.status}:${entered}`} assignmentId={a.id} onAssignment={setAssignment} />
               </section>
             </>
           )}

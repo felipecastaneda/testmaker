@@ -58,6 +58,7 @@ function toSummary(
       timeLimitMinutes: resolveSetting("assignments.defaultTimeLimit", orgSettings, courseSettings).value || null,
       resultsRelease: resolveSetting("assignments.resultsRelease", orgSettings, courseSettings).value,
       showCorrectAnswers: resolveSetting("assignments.showCorrectAnswers", orgSettings, courseSettings).value,
+      deliveryModes: resolveSetting("delivery.modes", orgSettings, courseSettings).value,
     },
     generation: {
       allowedModels: resolveSetting("generation.allowedModels", orgSettings).value,

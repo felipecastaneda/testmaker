@@ -122,6 +122,13 @@ export async function getSelectedModelsPref(uid: string): Promise<string[] | nul
   return Array.isArray(prefs) ? prefs : null;
 }
 
+/** Which delivery modes (online/paper) a course allows. Caller must have checked course access. */
+export async function getDeliveryModes(orgId: string, courseId: string) {
+  const db = adminDb();
+  const [org, course] = await db.getAll(db.collection(ORGS).doc(orgId), db.collection(COURSES).doc(courseId));
+  return resolveSetting("delivery.modes", org.get("settings") as StoredSettings | undefined, course.get("settings") as StoredSettings | undefined).value;
+}
+
 /** Settings that shape generation in a course. Caller must have checked course access. */
 export async function getGenerationSettings(orgId: string, courseId: string) {
   const db = adminDb();

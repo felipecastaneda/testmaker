@@ -29,6 +29,11 @@ export interface GradebookAttempt {
   grade: AttemptGrade | null;
   /** Times the student left the exam page (informational). */
   focusLosses: number;
+  /** Paper attempts were typed (or scanned) in by the professor. */
+  source: "online" | "paper";
+  /** Paper version ("A".."D"), or null online. */
+  variant: string | null;
+  entry: "typed" | "scan" | null;
 }
 
 export interface GradebookView {
@@ -96,6 +101,7 @@ function csvCell(value: string | number | null): string {
  * correctly. Per-question columns hold points earned; in-progress attempts have no score.
  */
 export function gradebookCsv(view: GradebookView): string {
+  if (view.assignment.delivery === "paper") return paperCsv(view);
   const header = [
     "Name",
     "Student ID",
@@ -127,5 +133,31 @@ export function gradebookCsv(view: GradebookView): string {
         ...view.questions.map((q) => (g ? (g.perQuestion[q.id]?.points ?? 0) : null)),
       ];
     });
-  return "﻿" + [header, ...rows].map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
+  return toCsv([header, ...rows]);
+}
+
+/** Paper exams: version and how the answers were entered instead of times and page leaves. */
+function paperCsv(view: GradebookView): string {
+  const header = ["Name", "Student ID", "Version", "Entered", "Saved", "Score", "Possible", "Percent", ...view.questions.map((_, i) => `Q${i + 1}`)];
+  const rows = [...view.attempts]
+    .sort((a, b) => a.studentName.localeCompare(b.studentName) || a.studentId.localeCompare(b.studentId))
+    .map((a) => {
+      const g = a.grade;
+      return [
+        a.studentName,
+        a.studentId,
+        a.variant,
+        a.entry === "scan" ? "Scanned" : "Typed",
+        a.submittedAt,
+        g ? g.earned : null,
+        g ? g.possible : null,
+        g ? percentage(g.earned, g.possible) : null,
+        ...view.questions.map((q) => (g ? (g.perQuestion[q.id]?.points ?? 0) : null)),
+      ];
+    });
+  return toCsv([header, ...rows]);
+}
+
+function toCsv(rows: (string | number | null)[][]): string {
+  return "﻿" + rows.map((r) => r.map(csvCell).join(",")).join("\r\n") + "\r\n";
 }

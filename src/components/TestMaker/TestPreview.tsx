@@ -170,7 +170,7 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
               </Button>
               {testId && (
                 <Button size="sm" onClick={() => setAssignOpen(true)} disabled={questions.length === 0} className="rounded-full bg-emerald-600 hover:bg-emerald-700">
-                  <Send className="h-4 w-4 mr-2" /> Assign online
+                  <Send className="h-4 w-4 mr-2" /> Assign
                 </Button>
               )}
               {testId && assignOpen && (
@@ -180,7 +180,7 @@ export function TestPreview({ questions, setQuestions, onReset, testId, testName
                   testId={testId}
                   testName={testName ?? "Exam"}
                   courseId={courseId ?? null}
-                  questionCount={questions.length}
+                  questions={questions}
                 />
               )}
             </div>

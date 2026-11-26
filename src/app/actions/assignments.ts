@@ -2,10 +2,12 @@
 
 import { z } from 'zod';
 import { MAX_STUDENTS_LIMIT, MAX_TIME_LIMIT_MINUTES } from '@/lib/assignments';
-import type { ActionResult, AssignmentOptions, AssignmentStatus, AssignmentSummary } from '@/lib/types';
+import { PAPER_ID_MAX, PAPER_ID_MIN, PAPER_MAX_VERSIONS, type PaperExam } from "@/lib/paper";
+import type { ActionResult, AssignmentOptions, AssignmentStatus, AssignmentSummary, PaperOptions } from '@/lib/types';
 import { UserFacingError, withUser } from '@/server/action-result';
 import * as repo from '@/server/assignments-repo';
 import * as gradebook from '@/server/gradebook-repo';
+import * as paper from '@/server/paper-repo';
 import type { GradebookView } from '@/lib/gradebook';
 
 const Id = z.string().min(1).max(200).regex(/^[^/]+$/);
@@ -21,6 +23,20 @@ const Options = z.object({
   maxStudents: z.number().int().min(1, 'Allow at least 1 student.').max(MAX_STUDENTS_LIMIT, `At most ${MAX_STUDENTS_LIMIT} students.`),
 });
 const Patch = Options.partial().extend({ status: z.enum(['draft', 'open', 'closed']).optional() });
+const Paper = z
+  .object({
+    versions: z.number().int().min(1).max(PAPER_MAX_VERSIONS, `At most ${PAPER_MAX_VERSIONS} versions.`),
+    idLength: z.number().int().min(PAPER_ID_MIN).max(PAPER_ID_MAX, `Student IDs can have ${PAPER_ID_MIN}–${PAPER_ID_MAX} characters.`),
+    idCharset: z.enum(['letters_digits', 'digits']),
+  })
+  .nullable();
+const PaperAnswers = z.object({
+  studentId: z.string().max(40),
+  studentName: z.string().max(200),
+  variant: z.string().length(1),
+  letters: z.array(z.number().int().min(0).max(9).nullable()).max(200),
+  replace: z.boolean(),
+});
 
 function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   const result = schema.safeParse(value);
@@ -28,14 +44,29 @@ function parse<T>(schema: z.ZodType<T>, value: unknown): T {
   return result.data;
 }
 
-/** Snapshot the test's current questions into a new assignment. Returns its id. */
+/** Snapshot the test's current questions into a new assignment (online, or paper with `paper`). Returns its id. */
 export async function createAssignment(
   idToken: string,
   testId: string,
   options: AssignmentOptions,
-  open: boolean
+  open: boolean,
+  paperOptions: PaperOptions | null = null
 ): Promise<ActionResult<string>> {
-  return withUser(idToken, (user) => repo.createAssignment(user, parse(Id, testId), parse(Options, options), open === true));
+  return withUser(idToken, (user) =>
+    repo.createAssignment(user, parse(Id, testId), parse(Options, options), open === true, parse(Paper, paperOptions))
+  );
+}
+
+// Paper exams ----------------------------------------------------------------
+
+/** Questions with the answer key and the version seed, for printing (professors only). */
+export async function getPaperExam(idToken: string, id: string): Promise<ActionResult<PaperExam>> {
+  return withUser(idToken, (user) => paper.getPaperExam(user, parse(Id, id)));
+}
+
+/** Grade and save one student's typed answers. Returns `saved: false` if the ID already has an attempt and `replace` is off. */
+export async function savePaperAnswers(idToken: string, id: string, input: paper.PaperAnswersInput): Promise<ActionResult<paper.SavePaperResult>> {
+  return withUser(idToken, (user) => paper.savePaperAnswers(user, parse(Id, id), parse(PaperAnswers, input)));
 }
 
 export async function listAssignments(idToken: string, courseId?: string): Promise<ActionResult<AssignmentSummary[]>> {
