@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AVAILABLE_MODELS } from "@/ai/models";
+import { IDENTITY_LABELS, parseDomains, type StudentIdentity } from "@/lib/student-identity";
 
 /**
  * Every setting TestMaker knows about, in one place. Shared by the server (validation,
@@ -116,6 +117,46 @@ export const SETTINGS = {
         { value: "paper", label: "Paper only" },
       ],
     },
+  }),
+  "students.identity": define<StudentIdentity>({
+    label: "How students identify themselves",
+    help: "For online exams: type a name and student ID, or sign in with a Google account (the exam then knows exactly who took it).",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: true,
+    schema: z.enum(["name_and_id", "google"]),
+    default: "name_and_id",
+    input: {
+      kind: "select",
+      options: [
+        { value: "name_and_id", label: IDENTITY_LABELS.name_and_id },
+        { value: "google", label: IDENTITY_LABELS.google },
+      ],
+    },
+  }),
+  "students.allowedDomains": define<string>({
+    label: "Student email domains",
+    help: "With Google sign-in, only accounts from these domains can take exams (e.g. school.edu, students.school.edu). Leave empty to accept any Google account.",
+    group: "assignments",
+    scopes: ["org"],
+    lockable: false,
+    schema: z
+      .string()
+      .max(1_000)
+      .refine((v) => parseDomains(v).invalid.length === 0, { message: "Use domain names like school.edu, separated by commas." })
+      .transform((v) => parseDomains(v).domains.join(", ")),
+    default: "",
+    input: { kind: "text", maxLength: 1_000, placeholder: "school.edu, students.school.edu" },
+  }),
+  "students.askStudentId": define<boolean>({
+    label: "Ask signed-in students for their student ID",
+    help: "Useful to match grades in spreadsheets or your LMS. Their email is always recorded.",
+    group: "assignments",
+    scopes: ["org", "course"],
+    lockable: false,
+    schema: z.boolean(),
+    default: true,
+    input: { kind: "boolean" },
   }),
   "assignments.defaultTimeLimit": define<number>({
     label: "Default time limit (minutes)",

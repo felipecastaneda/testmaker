@@ -151,6 +151,17 @@ production data or spends API credits. First run: `npx playwright install chromi
   answers and explanations) according to the assignment's results policy. Student actions
   (`src/app/actions/take.ts`) never use Firebase Auth or the professor signup gate, and
   only ever touch the one assignment or attempt they name.
+- **Student sign-in (Google)**: a course setting (*How students identify themselves*, lockable by
+  the organization, changeable per exam until someone starts) chooses between typed name + ID and
+  **Google sign-in**. With Google, the organization's *Student email domains* (e.g. `school.edu`;
+  empty = any account) are copied onto the assignment and checked on the server against the
+  verified email; the student ID can still be asked (*Ask signed-in students for their student
+  ID*). There's one attempt per Google account, and signing in again on another device resumes it
+  (the old device's session ends). Students sign in through a separate, in-memory Firebase Auth
+  instance (`src/lib/student-auth.ts`), so it never touches a professor's session and nothing
+  stays signed in on shared computers; the ID token is used once, to join. Student accounts never
+  pass the professor signup gate. The gradebook and CSV show the verified email. Plan:
+  [docs/plans/step-4-student-sign-in.md](docs/plans/step-4-student-sign-in.md).
 - **Gradebook** (on each assignment page): one row per student with status, score, % and time,
   and per question ✓/✗/– plus the % of students who got it right. Professors can:
   - **regrade** a question (accept extra options, or give everyone full credit); all
@@ -221,10 +232,10 @@ tests/{testId}/versions/v{n}                 archived version metadata
 tests/{testId}/versions/v{n}/questions/{id}  archived questions
 invites/{sha256(token)}                      orgId, email, role, expiresAt, acceptedAt?, revokedAt?
 usage/{uid}_{yyyy-mm-dd}                     daily question count
-assignments/{id}                             options, delivery (online | paper), paper {versions, idLength, idCharset, seed}, status, joinCode, testVersion, ...
+assignments/{id}                             options (incl. identity, allowedDomains), delivery (online | paper), paper {versions, idLength, idCharset, seed}, status, joinCode, testVersion, ...
 assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
 assignments/{id}/meta/classList              entries [{id, name}] (paper exams, optional)
-assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade (paper: source, variant, entry, letters)
+assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID (+ uid, email with sign-in), deadline, order, answers, grade (paper: source, variant, entry, letters)
 joinCodes/{code}                             assignmentId
 Storage: paper-scans/{assignmentId}/{attemptId}.jpg   scanned answer sheet (paper exams)
 _meta/platform                               signupMode, allowedEmails

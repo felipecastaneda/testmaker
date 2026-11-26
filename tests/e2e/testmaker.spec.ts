@@ -570,6 +570,82 @@ test.describe.serial("TestMaker", () => {
     for (const p of [fay, gus]) await p.context().close();
   });
 
+  test("students sign in with Google: school domain only, student ID, resume on another device, email in gradebook", async ({ page, browser }) => {
+    await signIn(page, E2E.teacher);
+    // The organization accepts school.edu accounts only.
+    await page.getByRole("link", { name: "Settings" }).click();
+    await page.getByRole("tab", { name: "Organization" }).click();
+    await page.getByLabel("Student email domains").fill("@School.edu");
+    await page.getByRole("button", { name: "Save organization settings" }).click();
+    await expect(page.getByText("Settings saved", { exact: true })).toBeVisible();
+    await page.getByRole("link", { name: "Back to TestMaker" }).click();
+
+    await page.getByRole("button", { name: "My Library" }).click();
+    await page.getByTestId("library-item").filter({ hasText: "Exam Source" }).getByRole("button", { name: /Open Test/ }).click();
+    await page.getByRole("button", { name: "Assign", exact: true }).click();
+    const dialog = page.getByRole("dialog");
+    await dialog.getByLabel("Title students see").fill("Quiz G");
+    await dialog.getByLabel("Students identify themselves with").selectOption("google");
+    await expect(dialog.getByText("school.edu accounts only", { exact: false })).toBeVisible();
+    await expect(dialog.getByLabel("Also ask for their student ID")).toBeChecked();
+    await dialog.getByRole("button", { name: "Create and open" }).click();
+    await expect(page.getByRole("heading", { name: "Quiz G" })).toBeVisible();
+    await expect(page.getByText("Sign in with Google (school.edu) + student ID")).toBeVisible();
+    const code = (await page.getByTestId("join-code").textContent())!;
+
+    /** Sign in through the Auth emulator's Google pop-up (a new account, or the existing one). */
+    const googleSignIn = async (student: Page, email: string, name: string) => {
+      const [popup] = await Promise.all([student.waitForEvent("popup"), student.getByRole("button", { name: "Sign in with Google" }).click()]);
+      await popup.waitForLoadState();
+      const existing = popup.getByText(email);
+      if (await existing.isVisible().catch(() => false)) {
+        await existing.click();
+      } else {
+        await popup.getByRole("button", { name: /Add new account/i }).click();
+        await popup.getByLabel("Email").fill(email);
+        await popup.getByLabel("Display name").fill(name);
+        await popup.getByRole("button", { name: /Sign in with Google/i }).click();
+      }
+      await popup.waitForEvent("close").catch(() => undefined);
+    };
+
+    const laptop = await otherPerson(browser);
+    await laptop.goto(`/take/${code}`);
+    await expect(laptop.getByText("Use your school.edu account.")).toBeVisible();
+    await expect(laptop.getByLabel("Full name")).toHaveCount(0);
+
+    // A personal account is turned away.
+    await googleSignIn(laptop, "kim@gmail.com", "Kim Gmail");
+    await expect(laptop.getByRole("alert").filter({ hasText: "kim@gmail.com" })).toHaveText("Use your school.edu account; kim@gmail.com can't take this exam.");
+
+    // The school account works; the student ID is asked too.
+    await googleSignIn(laptop, "kim@school.edu", "Kim Lee");
+    await expect(laptop.getByTestId("student-account")).toContainText("kim@school.edu");
+    await laptop.getByLabel("Student ID").fill("K-100");
+    await laptop.getByRole("button", { name: "Start exam" }).click();
+    await expect(laptop.getByTestId("exam-question")).toHaveCount(3);
+    await laptop.getByTestId("exam-question").first().getByRole("radio").first().check();
+    await expect(laptop.getByText("Kim Lee · 1 of 3 answered")).toBeVisible();
+    await expect(laptop.getByTestId("save-status")).toHaveText("All answers saved");
+
+    // On another device, signing in again continues the same attempt.
+    const tablet = await otherPerson(browser);
+    await tablet.goto(`/take/${code}`);
+    await googleSignIn(tablet, "kim@school.edu", "Kim Lee");
+    await tablet.getByLabel("Student ID").fill("K-100");
+    await tablet.getByRole("button", { name: "Start exam" }).click();
+    await expect(tablet.getByText("Kim Lee · 1 of 3 answered")).toBeVisible();
+
+    // One attempt, with the verified email, in the gradebook.
+    await page.reload();
+    const rows = page.getByTestId("gradebook-row");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("Kim Lee");
+    await expect(rows.first()).toContainText("K-100");
+    await expect(rows.first().getByTestId("row-email")).toHaveText("kim@school.edu");
+    for (const p of [laptop, tablet]) await p.context().close();
+  });
+
   test("paper exams: assign on paper, print versions and sheets, type answers, grade, CSV", async ({ page }) => {
     await signIn(page, E2E.teacher);
     await page.getByRole("button", { name: "My Library" }).click();

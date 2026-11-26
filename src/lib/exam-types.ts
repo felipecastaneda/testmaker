@@ -1,5 +1,6 @@
 import type { StudentResult } from "./grading";
 import type { StudentQuestion } from "./student-view";
+import type { StudentIdentity } from "./student-identity";
 import type { AssignmentAvailability } from "./types";
 
 /** What anyone with the join code may see before joining. */
@@ -11,6 +12,12 @@ export interface PublicAssignmentInfo {
   availability: AssignmentAvailability;
   opensAt: string | null;
   closesAt: string | null;
+  /** How students identify themselves for this exam. */
+  identity: StudentIdentity;
+  /** With sign-in: also ask for the student ID. */
+  askStudentId: boolean;
+  /** With sign-in: accepted email domains (empty = any account). */
+  allowedDomains: string[];
 }
 
 /** Everything a student's browser gets about their own attempt. Never the answer key. */

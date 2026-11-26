@@ -40,6 +40,8 @@ export function AssignDialog({ open, onOpenChange, testId, testName, courseId, q
     resultsRelease: defaults?.resultsRelease ?? "after_close",
     showCorrectAnswers: defaults?.showCorrectAnswers ?? true,
     maxStudents: DEFAULT_MAX_STUDENTS,
+    identity: defaults?.identity ?? "name_and_id",
+    askStudentId: defaults?.askStudentId ?? true,
   };
   const [chosen, setChosen] = useState<Delivery | null>(null);
   const delivery: Delivery = modes === "both" ? (chosen ?? "online") : modes;
@@ -114,6 +116,8 @@ export function AssignDialog({ open, onOpenChange, testId, testName, courseId, q
           <AssignmentForm
             key={JSON.stringify(defaults ?? null)}
             initial={initial}
+            identityLocked={defaults?.identityLocked}
+            allowedDomains={defaults?.allowedDomains}
             onChange={(o, p) => setEdited({ options: o, problem: p })}
           />
         )}

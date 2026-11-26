@@ -1,12 +1,13 @@
 import "server-only";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { FieldPath, FieldValue, type DocumentReference } from "firebase-admin/firestore";
-import { adminDb } from "./admin";
+import { adminAuth, adminDb } from "./admin";
 import { UserFacingError } from "./errors";
 import { attemptIsOver, availabilityOf, DEFAULT_MAX_STUDENTS, isValidJoinCode, normalizeJoinCode } from "@/lib/assignments";
 import type { JoinResult, PublicAssignmentInfo, StudentExamView } from "@/lib/exam-types";
 import { attemptDeadline, cleanName, gradeAttempt, studentKeyOf, studentResult, type AttemptGrade } from "@/lib/grading";
 import { orderOptions } from "@/lib/question-utils";
+import { domainHint, emailAllowed } from "@/lib/student-identity";
 import { toStudentQuestion } from "@/lib/student-view";
 import type { AssignmentStatus, QuestionData } from "@/lib/types";
 import { seededShuffle } from "@/lib/utils";
@@ -72,6 +73,9 @@ export async function getPublicInfo(code: string): Promise<PublicAssignmentInfo>
     availability: availability(d),
     opensAt: d.opensAt ?? null,
     closesAt: d.closesAt ?? null,
+    identity: d.identity === "google" ? "google" : "name_and_id",
+    askStudentId: d.askStudentId === true,
+    allowedDomains: Array.isArray(d.allowedDomains) ? d.allowedDomains : [],
   };
 }
 
@@ -186,23 +190,84 @@ async function buildView(ctx: AttemptContext): Promise<StudentExamView> {
 // Actions
 // ---------------------------------------------------------------------------
 
-export async function joinAssignment(code: string, rawName: string, rawStudentId: string, userAgent: string): Promise<JoinResult> {
+interface Joiner {
+  studentName: string;
+  studentId: string;
+  studentKey: string;
+  /** Signed-in students only. */
+  account: { uid: string; email: string; provider: string } | null;
+}
+
+const STUDENT_ID_PROBLEM = "Please enter your student ID (up to 40 characters).";
+
+/** A student who typed their name and ID. */
+function typedStudent(rawName: string, rawStudentId: string): Joiner {
+  const studentName = cleanName(rawName);
+  const studentId = cleanName(rawStudentId);
+  const studentKey = studentKeyOf(studentId);
+  if (!studentName || studentName.length > 80) throw new UserFacingError("Please enter your full name (up to 80 characters).");
+  if (!studentKey || studentId.length > 40) throw new UserFacingError(STUDENT_ID_PROBLEM);
+  return { studentName, studentId, studentKey, account: null };
+}
+
+/**
+ * A student who signed in with Google: the verified account decides who they are (and the
+ * assignment's allowed domains whether they may join). One attempt per account.
+ */
+async function signedInStudent(d: FirebaseFirestore.DocumentData, idToken: string | null, rawStudentId: string): Promise<Joiner> {
+  if (!idToken) throw new UserFacingError("Sign in with Google to take this exam.");
+  let decoded;
+  try {
+    decoded = await adminAuth().verifyIdToken(idToken);
+  } catch {
+    throw new UserFacingError("Your sign-in has expired. Sign in again.");
+  }
+  if (decoded.firebase?.sign_in_provider !== "google.com") throw new UserFacingError("Sign in with a Google account to take this exam.");
+  const email = decoded.email?.toLowerCase();
+  if (!email || !decoded.email_verified) throw new UserFacingError("Your Google account has no verified email address.");
+  const domains: string[] = Array.isArray(d.allowedDomains) ? d.allowedDomains : [];
+  if (!emailAllowed(email, domains)) {
+    throw new UserFacingError(`This exam needs your ${domainHint(domains)} account; ${email} can't take it. Sign in with your school account.`);
+  }
+  const typedId = cleanName(rawStudentId);
+  if (d.askStudentId === true && (!studentKeyOf(typedId) || typedId.length > 40)) throw new UserFacingError(STUDENT_ID_PROBLEM);
+  return {
+    studentName: (cleanName(decoded.name ?? "") || email).slice(0, 80),
+    studentId: d.askStudentId === true ? typedId : email,
+    studentKey: `uid:${decoded.uid}`,
+    account: { uid: decoded.uid, email, provider: "google.com" },
+  };
+}
+
+export async function joinAssignment(
+  code: string,
+  rawName: string,
+  rawStudentId: string,
+  userAgent: string,
+  idToken: string | null = null
+): Promise<JoinResult> {
   const snap = await findByCode(code);
   const d = snap.data()!;
   const now = availability(d);
   if (now !== "open") throw new UserFacingError(NOT_AVAILABLE[now]);
 
-  const studentName = cleanName(rawName);
-  const studentId = cleanName(rawStudentId);
-  const studentKey = studentKeyOf(studentId);
-  if (!studentName || studentName.length > 80) throw new UserFacingError("Please enter your full name (up to 80 characters).");
-  if (!studentKey || studentId.length > 40) throw new UserFacingError("Please enter your student ID (up to 40 characters).");
+  const joiner = d.identity === "google" ? await signedInStudent(d, idToken, rawStudentId) : typedStudent(rawName, rawStudentId);
+  const { studentName, studentId, studentKey } = joiner;
 
   const assignmentRef = snap.ref;
   const attemptRef = assignmentRef.collection(ATTEMPTS).doc(attemptIdFor(snap.id, studentKey));
+  const secret = randomBytes(32).toString("base64url");
+
+  // Signed in again (another device, cleared browser): resume the same attempt with a new
+  // token. The old token stops working, so only one device at a time can answer.
+  if (joiner.account && (await attemptRef.get()).exists) {
+    await attemptRef.update({ tokenHash: sha256(secret), userAgent: userAgent.slice(0, 200), resumedAt: new Date().toISOString() });
+    const token = `${snap.id}.${attemptRef.id}.${secret}`;
+    return { token, view: await getExamView(token) };
+  }
+
   const questionIds = [...(await readQuestions(assignmentRef)).keys()];
   const order = d.shuffleQuestions ? seededShuffle(questionIds, attemptRef.id) : questionIds;
-  const secret = randomBytes(32).toString("base64url");
   const startedAt = new Date();
 
   // The professor's student limit. A count, not a shared counter, so a whole class joining
@@ -219,6 +284,7 @@ export async function joinAssignment(code: string, rawName: string, rawStudentId
       studentName,
       studentId,
       studentKey,
+      ...(joiner.account ? { uid: joiner.account.uid, email: joiner.account.email, provider: joiner.account.provider } : {}),
       startedAt: startedAt.toISOString(),
       deadline: attemptDeadline(startedAt, d.closesAt ?? null, d.timeLimitMinutes ?? null),
       order,

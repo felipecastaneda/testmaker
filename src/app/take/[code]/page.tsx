@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { normalizeJoinCode } from "@/lib/assignments";
 import type { PublicAssignmentInfo, StudentExamView } from "@/lib/exam-types";
 import { formatPoints } from "@/lib/question-utils";
+import { signInStudentWithGoogle, signOutStudent, studentIdToken, type StudentAccount } from "@/lib/student-auth";
+import { domainHint, emailAllowed } from "@/lib/student-identity";
 
 /** The browser remembers the attempt per exam code, so students can resume after a refresh. */
 const storageKey = (code: string) => `testmaker:attempt:${code}`;
@@ -101,16 +103,39 @@ function JoinForm({
   const [studentId, setStudentId] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [account, setAccount] = useState<StudentAccount | null>(null);
   const open = info.availability === "open";
+  const google = info.identity === "google";
+  const needsId = !google || info.askStudentId;
+
+  const signIn = async () => {
+    setError(null);
+    try {
+      const signedIn = await signInStudentWithGoogle(info.allowedDomains);
+      if (!signedIn) return;
+      if (!emailAllowed(signedIn.email, info.allowedDomains)) {
+        await signOutStudent();
+        setError(`Use your ${domainHint(info.allowedDomains)} account; ${signedIn.email} can't take this exam.`);
+        return;
+      }
+      setAccount(signedIn);
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
     setError(null);
-    const result = await joinExam(code, name, studentId);
+    const idToken = google ? ((await studentIdToken()) ?? account?.idToken ?? null) : null;
+    const result = await joinExam(code, name, studentId, idToken);
     setBusy(false);
-    if (result.success && result.data) onJoined(result.data.token, result.data.view);
-    else setError(result.error ?? "Couldn't start the exam.");
+    if (result.success && result.data) {
+      // The exam runs on its attempt token; the Google session isn't needed any more.
+      if (google) await signOutStudent();
+      onJoined(result.data.token, result.data.view);
+    } else setError(result.error ?? "Couldn't start the exam.");
   };
 
   return (
@@ -138,28 +163,70 @@ function JoinForm({
         </p>
       ) : (
         <form onSubmit={submit} className="space-y-4">
-          <div className="space-y-1.5">
-            <label htmlFor="student-name" className="text-sm font-medium">
-              Full name
-            </label>
-            <Input id="student-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" required />
-          </div>
-          <div className="space-y-1.5">
-            <label htmlFor="student-id" className="text-sm font-medium">
-              Student ID
-            </label>
-            <Input id="student-id" value={studentId} onChange={(e) => setStudentId(e.target.value)} maxLength={40} autoComplete="off" required />
-          </div>
+          {google ? (
+            account ? (
+              <div className="flex items-center justify-between gap-2 rounded-lg border border-slate-200 p-3 text-sm" data-testid="student-account">
+                <span>
+                  <span className="font-medium text-slate-800 block">{account.name || account.email}</span>
+                  <span className="text-xs text-muted-foreground">{account.email}</span>
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={async () => {
+                    await signOutStudent();
+                    setAccount(null);
+                  }}
+                >
+                  Use another account
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-2 text-center">
+                <Button type="button" variant="outline" size="lg" className="w-full" onClick={signIn}>
+                  Sign in with Google
+                </Button>
+                <p className="text-xs text-muted-foreground">
+                  {info.allowedDomains.length ? `Use your ${domainHint(info.allowedDomains)} account.` : "Use your school Google account."}
+                </p>
+              </div>
+            )
+          ) : (
+            <div className="space-y-1.5">
+              <label htmlFor="student-name" className="text-sm font-medium">
+                Full name
+              </label>
+              <Input id="student-name" value={name} onChange={(e) => setName(e.target.value)} maxLength={80} autoComplete="name" required />
+            </div>
+          )}
+          {needsId && (!google || account) && (
+            <div className="space-y-1.5">
+              <label htmlFor="student-id" className="text-sm font-medium">
+                Student ID
+              </label>
+              <Input id="student-id" value={studentId} onChange={(e) => setStudentId(e.target.value)} maxLength={40} autoComplete="off" required />
+            </div>
+          )}
           {error && (
             <p className="text-sm text-rose-600" role="alert">
               {error}
             </p>
           )}
-          <Button type="submit" className="w-full" size="lg" disabled={busy || !name.trim() || !studentId.trim()}>
-            {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start exam"}
-          </Button>
+          {(!google || account) && (
+            <Button
+              type="submit"
+              className="w-full"
+              size="lg"
+              disabled={busy || (!google && !name.trim()) || (needsId && !studentId.trim())}
+            >
+              {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Start exam"}
+            </Button>
+          )}
           <p className="text-xs text-muted-foreground text-center">
-            You get one attempt. {info.timeLimitMinutes ? "The timer starts when you click Start." : ""}
+            You get one attempt.{" "}
+            {google ? "If you change devices, sign in again to continue where you left off. " : ""}
+            {info.timeLimitMinutes ? "The timer starts when you click Start." : ""}
           </p>
         </form>
       )}

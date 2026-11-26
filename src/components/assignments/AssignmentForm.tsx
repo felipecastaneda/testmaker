@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Input } from "@/components/ui/input";
 import { MAX_STUDENTS_LIMIT, MAX_TIME_LIMIT_MINUTES, validateAssignmentOptions } from "@/lib/assignments";
+import { domainHint, IDENTITY_LABELS, type StudentIdentity } from "@/lib/student-identity";
 import type { AssignmentOptions, ResultsRelease } from "@/lib/types";
 
 /** ISO time → value for <input type="datetime-local"> in the user's time zone. */
@@ -29,10 +30,14 @@ interface AssignmentFormProps {
   initial: AssignmentOptions;
   /** Called with valid options, or null while the form has a problem. */
   onChange: (options: AssignmentOptions | null, problem: string | null) => void;
+  /** The organization fixed how students identify themselves. */
+  identityLocked?: boolean;
+  /** Allowed email domains for Google sign-in (shown as a hint). */
+  allowedDomains?: string[];
 }
 
 /** The options shared by "Assign online" and editing an assignment. */
-export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
+export function AssignmentForm({ initial, onChange, identityLocked = false, allowedDomains = [] }: AssignmentFormProps) {
   const [title, setTitle] = useState(initial.title);
   const [opensAt, setOpensAt] = useState(toLocalInput(initial.opensAt));
   const [closesAt, setClosesAt] = useState(toLocalInput(initial.closesAt));
@@ -41,9 +46,24 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
   const [resultsRelease, setRelease] = useState<ResultsRelease>(initial.resultsRelease);
   const [showCorrectAnswers, setShowCorrect] = useState(initial.showCorrectAnswers);
   const [maxStudents, setMaxStudents] = useState(String(initial.maxStudents));
+  const [identity, setIdentity] = useState<StudentIdentity>(initial.identity);
+  const [askStudentId, setAskStudentId] = useState(initial.askStudentId);
 
-  const emit = (next: Partial<{ title: string; opensAt: string; closesAt: string; limit: string; shuffleQuestions: boolean; resultsRelease: ResultsRelease; showCorrectAnswers: boolean; maxStudents: string }>) => {
-    const v = { title, opensAt, closesAt, limit, shuffleQuestions, resultsRelease, showCorrectAnswers, maxStudents, ...next };
+  const emit = (
+    next: Partial<{
+      title: string;
+      opensAt: string;
+      closesAt: string;
+      limit: string;
+      shuffleQuestions: boolean;
+      resultsRelease: ResultsRelease;
+      showCorrectAnswers: boolean;
+      maxStudents: string;
+      identity: StudentIdentity;
+      askStudentId: boolean;
+    }>
+  ) => {
+    const v = { title, opensAt, closesAt, limit, shuffleQuestions, resultsRelease, showCorrectAnswers, maxStudents, identity, askStudentId, ...next };
     const max = Number(v.maxStudents);
     const options: AssignmentOptions = {
       title: v.title.trim(),
@@ -54,6 +74,8 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
       resultsRelease: v.resultsRelease,
       showCorrectAnswers: v.showCorrectAnswers,
       maxStudents: max,
+      identity: v.identity,
+      askStudentId: v.askStudentId,
     };
     const problem = !options.title
       ? "Please give the assignment a title."
@@ -152,6 +174,48 @@ export function AssignmentForm({ initial, onChange }: AssignmentFormProps) {
             ))}
           </select>
         </div>
+      </div>
+
+      <div className="space-y-1.5">
+        <label htmlFor="assignment-identity" className="text-sm font-medium">
+          Students identify themselves with
+        </label>
+        <select
+          id="assignment-identity"
+          className={selectClass}
+          value={identity}
+          disabled={identityLocked}
+          onChange={(e) => {
+            const value = e.target.value as StudentIdentity;
+            setIdentity(value);
+            emit({ identity: value });
+          }}
+        >
+          {(Object.keys(IDENTITY_LABELS) as StudentIdentity[]).map((k) => (
+            <option key={k} value={k}>
+              {IDENTITY_LABELS[k]}
+            </option>
+          ))}
+        </select>
+        <p className="text-xs text-muted-foreground">
+          {identity === "google"
+            ? `Students sign in with Google${allowedDomains.length ? ` (${domainHint(allowedDomains)} accounts only)` : ""}, so nobody can start in someone else's name, and they can continue on another device.`
+            : "Students type their name and student ID. Quick, but anyone could type someone else's ID."}
+          {identityLocked ? " Set by your organization." : ""}
+        </p>
+        {identity === "google" && (
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={askStudentId}
+              onChange={(e) => {
+                setAskStudentId(e.target.checked);
+                emit({ askStudentId: e.target.checked });
+              }}
+            />
+            Also ask for their student ID
+          </label>
+        )}
       </div>
 
       <div className="space-y-1.5">

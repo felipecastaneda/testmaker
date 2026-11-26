@@ -33,6 +33,7 @@ function attempt(over: Partial<GradebookAttempt> & { answers: Record<string, str
     variant: null,
     entry: null,
     hasScan: false,
+    email: null,
     ...over,
   };
 }
@@ -99,5 +100,15 @@ describe("paper helpers", () => {
       { variant: "B", count: 2, average: 34 }, // 0% and 67%
     ]);
     expect(missingStudents([{ id: "A1", name: "Ana" }, { id: "C1", name: "Cy" }], paper)).toEqual([{ id: "C1", name: "Cy" }]);
+  });
+});
+
+describe("gradebook CSV with Google sign-in", () => {
+  it("adds the verified email after the student ID", () => {
+    const a = attempt({ studentName: "Ana", studentId: "A1", answers: {}, email: "ana@school.edu" });
+    const csv = gradebookCsv({ assignment: { identity: "google" } as AssignmentSummary, questions, attempts: [a], classList: [] });
+    const lines = csv.replace(/^﻿/, "").trimEnd().split("\r\n");
+    expect(lines[0].startsWith("Name,Student ID,Email,Status,")).toBe(true);
+    expect(lines[1].startsWith("Ana,A1,ana@school.edu,Submitted,")).toBe(true);
   });
 });
