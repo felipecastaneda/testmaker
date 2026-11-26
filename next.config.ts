@@ -1,7 +1,10 @@
 import type {NextConfig} from 'next';
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  experimental: {
+    // Paper exam scans are uploaded through a server action (about 0.3 MB each).
+    serverActions: { bodySizeLimit: "3mb" },
+  },
   typescript: {
     ignoreBuildErrors: false,
   },

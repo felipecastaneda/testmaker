@@ -2,6 +2,7 @@ import "server-only";
 import { getApps, initializeApp, type App } from "firebase-admin/app";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, type Firestore } from "firebase-admin/firestore";
+import { getStorage } from "firebase-admin/storage";
 
 let app: App | undefined;
 let db: Firestore | undefined;
@@ -39,4 +40,16 @@ export function adminDb(): Firestore {
 
 export function adminAuth() {
   return getAuth(getAdminApp());
+}
+
+/**
+ * The project's Cloud Storage bucket (server-only: storage.rules deny all browser access).
+ * With the emulators, FIREBASE_STORAGE_EMULATOR_HOST points firebase-admin at the local one.
+ */
+export function adminBucket() {
+  const name =
+    process.env.FIREBASE_STORAGE_BUCKET ??
+    process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET ??
+    `${process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ?? process.env.GCLOUD_PROJECT}.appspot.com`;
+  return getStorage(getAdminApp()).bucket(name);
 }

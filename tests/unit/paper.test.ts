@@ -177,6 +177,7 @@ describe("paper gradebook CSV", () => {
       source: "paper",
       variant: "B",
       entry: "typed",
+      hasScan: false,
     };
     const csv = gradebookCsv({
       assignment: { delivery: "paper" } as AssignmentSummary,

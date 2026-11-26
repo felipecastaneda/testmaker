@@ -6,6 +6,7 @@ import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { loadTest } from "./tests-repo";
 import { getCourseAccess, listViewableCourses, requireCourseAccess } from "./workspace";
+import { deleteAssignmentScans } from "./scans-store";
 import { getDeliveryModes } from "./settings-repo";
 import { availabilityOf, DEFAULT_MAX_STUDENTS, makeJoinCode, validateAssignmentOptions } from "@/lib/assignments";
 import { paperProblem } from "@/lib/paper";
@@ -228,6 +229,7 @@ export async function deleteAssignment(user: AuthedUser, id: string): Promise<vo
   const { ref, snap } = await requireEditable(user, id);
   const db = adminDb();
   await db.recursiveDelete(ref);
+  if (snap.get("delivery") === "paper") await deleteAssignmentScans(id);
   const joinCode = snap.get("joinCode");
   if (joinCode) await db.collection(JOIN_CODES).doc(joinCode).delete();
 }

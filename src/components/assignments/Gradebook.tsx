@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { Check, Clock, Download, Eye, EyeOff, Loader2, Minus, RefreshCw, RotateCcw, Trash2, X } from "lucide-react";
-import { extendAttempt, getGradebook, regradeQuestion, resetAttempt, setResultsReleased } from "@/app/actions/assignments";
+import { extendAttempt, getGradebook, getPaperScan, regradeQuestion, resetAttempt, setResultsReleased } from "@/app/actions/assignments";
+import type { PaperScanView } from "@/server/paper-repo";
+import { ScanSheetView } from "./ScanSheetView";
 import { useAuth } from "@/components/auth/AuthProvider";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -36,6 +38,7 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [regrading, setRegrading] = useState<GradebookQuestion | null>(null);
+  const [viewing, setViewing] = useState<GradebookAttempt | null>(null);
 
   const load = useCallback(async () => {
     const result = await callAction((t) => getGradebook(t, assignmentId));
@@ -196,6 +199,16 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
                       <td className="px-3 py-2 text-xs whitespace-nowrap" data-testid="row-version">
                         <span className="font-semibold">{attempt.variant}</span>
                         <span className="text-muted-foreground"> · {attempt.entry === "scan" ? "scanned" : "typed"}</span>
+                        {attempt.hasScan && (
+                          <button
+                            type="button"
+                            className="ml-2 text-primary hover:underline"
+                            onClick={() => setViewing(attempt)}
+                            aria-label={`View scan for ${attempt.studentName || attempt.studentId}`}
+                          >
+                            View scan
+                          </button>
+                        )}
                       </td>
                     ) : (
                       <td className="px-3 py-2 text-xs whitespace-nowrap">
@@ -255,6 +268,7 @@ export function Gradebook({ assignmentId, onAssignment }: GradebookProps) {
         </div>
       )}
 
+      {viewing && <ScanDialog assignmentId={assignmentId} attempt={viewing} onClose={() => setViewing(null)} />}
       {regrading && (
         <RegradeDialog
           question={regrading}
@@ -326,6 +340,54 @@ function RegradeDialog({
           </Button>
           <Button onClick={() => onSave(fullCredit ? ["*"] : accepted)}>Save and regrade</Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function ScanDialog({ assignmentId, attempt, onClose }: { assignmentId: string; attempt: GradebookAttempt; onClose: () => void }) {
+  const { callAction } = useAuth();
+  const [scan, setScan] = useState<PaperScanView | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void callAction((t) => getPaperScan(t, assignmentId, attempt.id)).then((result) => {
+      if (cancelled) return;
+      if (result.success && result.data) setScan(result.data);
+      else setError(result.error ?? "Couldn't load the scan.");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [callAction, assignmentId, attempt.id]);
+
+  return (
+    <Dialog open onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="sm:max-w-2xl max-h-[95vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>
+            {attempt.studentName || attempt.studentId} · Version {attempt.variant}
+          </DialogTitle>
+          <DialogDescription>The scanned sheet, with the answers that were counted circled in green.</DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <p className="text-sm text-rose-600">{error}</p>
+        ) : !scan ? (
+          <Loader2 className="h-5 w-5 animate-spin text-primary" />
+        ) : (
+          <div data-testid="scan-view">
+            <ScanSheetView
+              src={scan.dataUrl}
+              width={scan.width}
+              height={scan.height}
+              corners={scan.corners}
+              paper={scan.paper}
+              optionCounts={scan.optionCounts}
+              letters={scan.letters}
+            />
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   );

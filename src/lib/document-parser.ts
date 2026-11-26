@@ -342,7 +342,7 @@ const MIN_PDF_TEXT = 100;
  * separate worker file (which Next.js can't reliably bundle). Text extraction for
  * documents of the sizes we accept is quick enough for that.
  */
-async function loadPdfjs() {
+export async function loadPdfjs() {
   const [pdfjs, worker] = await Promise.all([
     import("pdfjs-dist/legacy/build/pdf.mjs"),
     import("pdfjs-dist/legacy/build/pdf.worker.mjs"),

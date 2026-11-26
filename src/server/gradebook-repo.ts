@@ -3,6 +3,7 @@ import { FieldValue } from "firebase-admin/firestore";
 import { adminDb } from "./admin";
 import { getAccessible, requireEditable, toSummary } from "./assignments-repo";
 import { finishExpiredAttempts, readQuestions } from "./attempts-repo";
+import { deleteScan } from "./scans-store";
 import type { AuthedUser } from "./auth";
 import { UserFacingError } from "./errors";
 import { MAX_TIME_LIMIT_MINUTES } from "@/lib/assignments";
@@ -52,6 +53,7 @@ export async function getGradebook(user: AuthedUser, id: string): Promise<Gradeb
         source: d.get("source") === "paper" ? "paper" : "online",
         variant: d.get("variant") ?? null,
         entry: d.get("entry") ?? null,
+        hasScan: !!d.get("scan"),
       })
     ),
   };
@@ -72,6 +74,7 @@ export async function resetAttempt(user: AuthedUser, id: string, attemptId: stri
   const attemptRef = ref.collection(ATTEMPTS).doc(attemptId);
   if (!(await attemptRef.get()).exists) throw new UserFacingError(ATTEMPT_NOT_FOUND);
   await attemptRef.delete();
+  await deleteScan(id, attemptId); // paper attempts may have a scanned sheet
 }
 
 /**

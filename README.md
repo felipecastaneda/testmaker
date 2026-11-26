@@ -62,7 +62,8 @@ Credentials: run `gcloud auth application-default login` once.
   library and generate form show; the choice is remembered.
 - Each user can generate at most `DAILY_QUESTION_LIMIT` questions per day (UTC). Failed
   generations are refunded.
-- Firestore and Storage security rules deny all browser access; only the server reads data.
+- Firestore and Storage security rules deny all browser access; only the server reads data
+  (scanned sheets are served to professors through a server action).
 
 In production the allow-list lives in App Hosting secrets (the repo is public):
 
@@ -84,7 +85,7 @@ Changing a secret takes effect on the next rollout (push to `main`, or
 | `npm run lint` / `npm run typecheck` | ESLint / `tsc --noEmit` |
 | `npm test` | Unit tests (Vitest) |
 | `npm run test:e2e` | End-to-end tests (Playwright + Firebase emulators, needs Java) |
-| `npm run emulators` | Start the Auth and Firestore emulators |
+| `npm run emulators` | Start the Auth, Firestore and Storage emulators |
 | `npm run genkit:dev` | Genkit developer UI for the AI flow |
 | `npx tsx test-models.ts` | Smoke-test each configured model with real API keys |
 | `npm run migrate:step1 -- --project=<id>` | Organizations migration (dry run; add `--apply`) |
@@ -178,8 +179,18 @@ production data or spends API credits. First run: `npx playwright install chromi
   0–9 (or digits only, which leaves room for 100 questions instead of 75). The professor then
   **types each student's answers** (`ABD-C…`, with a live score preview); they're stored as
   ordinary attempts (`source: "paper"`, `variant`), so grading, regrade, item % and CSV work
-  unchanged. Re-entering a student ID asks before replacing. Scanning sheets comes next
-  ([plan](docs/plans/step-3-paper-exams.md)).
+  unchanged. Re-entering a student ID asks before replacing ([plan](docs/plans/step-3-paper-exams.md)).
+- **Scanning paper sheets**: on the paper exam page, drop phone photos or a scanner PDF (one
+  sheet per page). Sheets are read **in the browser** (`src/lib/omr.ts`, plain TypeScript, no AI):
+  it finds the four corner squares with a local threshold, maps the sheet through a homography
+  (tilted, upside-down and sideways photos work), reads the code strip for the version (a sheet
+  from another exam is caught), and measures each bubble against the paper right around it, so
+  uneven light doesn't matter. Two marks, faint marks and unreadable ID characters are flagged,
+  never guessed. The review table shows ID, version and answers (all editable) with a score
+  preview; *Check* shows the photo with the counted answers circled. Saved sheets become
+  attempts with `entry: "scan"`, and a downscaled JPEG is stored in Cloud Storage
+  (`paper-scans/{assignment}/{attempt}.jpg`, server-only) so the professor can *View scan* from
+  the gradebook. Images are deleted with the attempt or the assignment.
 - **Review**:
   - *Edit & review* mode shows the answer key, explanations and quotes. Edits, deletes and
     re-ordering are saved per question.
@@ -208,6 +219,7 @@ assignments/{id}                             options, delivery (online | paper),
 assignments/{id}/questions/{qid}             frozen questions (incl. answer key; server-only)
 assignments/{id}/attempts/{attemptId}        tokenHash, student name/ID, deadline, order, answers, grade (paper: source, variant, entry, letters)
 joinCodes/{code}                             assignmentId
+Storage: paper-scans/{assignmentId}/{attemptId}.jpg   scanned answer sheet (paper exams)
 _meta/platform                               signupMode, allowedEmails
 ```
 
